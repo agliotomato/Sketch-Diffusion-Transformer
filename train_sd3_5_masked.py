@@ -49,11 +49,22 @@ def main():
     
     # Optimizer
     params = list(filter(lambda p: p.requires_grad, transformer.parameters()))
-    optimizer = torch.optim.AdamW(params, lr=args.lr)
+import bitsandbytes as bnb
+import gc
+
+# ... (imports)
+
+    # Optimizer (Use 8-bit AdamW to save VRAM)
+    params = list(filter(lambda p: p.requires_grad, transformer.parameters()))
+    optimizer = bnb.optim.AdamW8bit(params, lr=args.lr)
 
     # 3. Data
     dataset = HairInpaintingDataset(args.data_root, size=1024)
     dataloader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True)
+
+    # Clear cache before training start
+    torch.cuda.empty_cache()
+    gc.collect()
 
     transformer, optimizer, dataloader, controlnet = accelerator.prepare(
         transformer, optimizer, dataloader, controlnet
