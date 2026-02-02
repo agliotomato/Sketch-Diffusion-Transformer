@@ -26,9 +26,9 @@ class HairInpaintingDataset(Dataset):
         # or we might need to assume 'input_1' style naming.
         # Let's verify directory structure later, but for now standard names:
         
-        self.img_dir = os.path.join(data_root, "img")
-        self.mask_dir = os.path.join(data_root, "matte")
-        self.cond_dir = os.path.join(data_root, "sketch") # Color Sketch
+        self.img_dir = os.path.join(data_root, "img", mode)
+        self.mask_dir = os.path.join(data_root, "matte", mode)
+        self.cond_dir = os.path.join(data_root, "sketch", mode) # Color Sketch
         
         # Collect files
         self.image_names = [f for f in os.listdir(self.img_dir) if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
