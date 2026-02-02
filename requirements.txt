@@ -1,10 +1,10 @@
-numpy<2
+numpy<2.0.0
 torch
-diffusers
-transformers
-accelerate
+diffusers>=0.30.0
+transformers>=4.40.0
+accelerate>=0.30.0
 opencv-python
-pillow
+Pillow>=10.0.0
 protobuf
 sentencepiece
 huggingface_hub
