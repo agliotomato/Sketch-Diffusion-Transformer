@@ -1,0 +1,11 @@
+torch
+diffusers
+transformers
+accelerate
+opencv-python
+pillow
+protobuf
+sentencepiece
+huggingface_hub
+peft
+bitsandbytes

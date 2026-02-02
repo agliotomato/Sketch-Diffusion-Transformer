@@ -1,0 +1,33 @@
+# Dataset & Models
+dataset/
+models/
+*.safetensors
+*.ckpt
+*.pth
+*.bin
+*.h5
+
+# Outputs
+sd35_hair_lora/
+results/
+logs/
+wandb/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.env
+.venv
+pip-log.txt
+pip-delete-this-directory.txt
+
+# OS / IDE
+.DS_Store
+.vscode/
+.idea/
+*.swp
