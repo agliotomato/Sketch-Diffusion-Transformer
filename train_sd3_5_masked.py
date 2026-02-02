@@ -45,6 +45,7 @@ def main():
         target_modules=["to_k", "to_q", "to_v", "to_out.0"],
     )
     transformer.add_adapter(lora_config)
+    transformer.enable_gradient_checkpointing()  # Optimize VRAM
     
     # Optimizer
     params = list(filter(lambda p: p.requires_grad, transformer.parameters()))
