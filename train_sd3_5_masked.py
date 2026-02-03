@@ -67,7 +67,9 @@ def main():
     transformer, optimizer, dataloader, controlnet = accelerator.prepare(
         transformer, optimizer, dataloader, controlnet
     )
-    vae.to(device)
+    # Fix Dtype Mismatch: Cast VAE and ControlNet to fp16
+    vae.to(device, dtype=torch.float16)
+    controlnet.to(device, dtype=torch.float16)
 
     print(f"Start Training: {len(dataset)} images, {args.epochs} epochs")
 
