@@ -122,12 +122,11 @@ def main():
                     control_hidden_states = noisy_latents
 
                 # Prepare ControlNet text args based on configuration
-                control_txt_kwargs = {}
+                control_txt_kwargs = {"pooled_projections": pooled_projections}
+                
+                # Only provide encoder_hidden_states if context_embedder is present
                 if getattr(controlnet, "context_embedder", None) is not None:
-                    control_txt_kwargs = {
-                        "encoder_hidden_states": encoder_hidden_states,
-                        "pooled_projections": pooled_projections
-                    }
+                    control_txt_kwargs["encoder_hidden_states"] = encoder_hidden_states
 
                 control_block_samples = controlnet(
                     hidden_states=control_hidden_states,
