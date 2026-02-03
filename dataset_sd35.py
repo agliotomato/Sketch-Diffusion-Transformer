@@ -61,12 +61,28 @@ class HairInpaintingDataset(Dataset):
         
         # 2. Mask (L)
         # Mask needs to be 1 for Hair (Loss region), 0 for Face (No Loss).
-        # Usually mattes are White(255) for hair.
         if os.path.exists(mask_path):
-            mask_img = Image.open(mask_path).convert("L")
+            mask_img = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)
+            if mask_img is None:
+                mask_img = np.zeros((self.size, self.size), dtype=np.uint8) + 255
+            else:
+                mask_img = cv2.resize(mask_img, (self.size, self.size), interpolation=cv2.INTER_NEAREST)
         else:
-            # Create dummy mask if missing (Full training?)
-            mask_img = Image.new("L", target_img.size, 255)
+            mask_img = np.zeros((self.size, self.size), dtype=np.uint8) + 255
+            
+        # Soft Masking Strategy
+        # 1. Binarize
+        _, mask_bin = cv2.threshold(mask_img, 127, 255, cv2.THRESH_BINARY)
+        
+        # 2. Dilate (Expand Headerline) - Kernel 15 (~1.5% of 1024px)
+        kernel = np.ones((15, 15), np.uint8)
+        mask_dilated = cv2.dilate(mask_bin, kernel, iterations=1)
+        
+        # 3. Blur (Soften Edges) - Sigma 10
+        mask_soft = cv2.GaussianBlur(mask_dilated, (0, 0), sigmaX=10)
+        
+        # 4. Normalize to [0, 1]
+        mask_tensor = torch.from_numpy(mask_soft.astype(np.float32) / 255.0).unsqueeze(0)
 
         # 3. Condition Image (Color Sketch) (RGB)
         if os.path.exists(cond_path):
@@ -77,14 +93,11 @@ class HairInpaintingDataset(Dataset):
         # Apply Transforms
         pixel_values = self.transform(target_img)
         conditioning_pixel_values = self.transform(cond_img)
-        mask = self.mask_transform(mask_img)
+        # mask = self.mask_transform(mask_img) # Removed: We did manual transform
         
-        # Binarize Mask for hard masking (Optional but recommended)
-        mask = (mask > 0.5).float()
-
         return {
             "pixel_values": pixel_values,      # Target (Original)
             "conditioning_pixel_values": conditioning_pixel_values, # Input (Color Sketch)
-            "masks": mask,                    # Loss Mask
+            "masks": mask_tensor,             # Soft Loss Mask
             "prompt": "A hairstyle"           # Dummy prompt (or load from txt if avail)
         }

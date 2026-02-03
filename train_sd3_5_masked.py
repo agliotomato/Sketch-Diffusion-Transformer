@@ -40,8 +40,9 @@ def main():
     controlnet.requires_grad_(False)
 
     # 2. Add LoRA to Transformer
+    # FIX: Increase Rank to 128 for better hair texture details
     lora_config = LoraConfig(
-        r=16, lora_alpha=16, init_lora_weights="gaussian",
+        r=128, lora_alpha=128, init_lora_weights="gaussian",
         target_modules=["to_k", "to_q", "to_v", "to_out.0"],
     )
     transformer.add_adapter(lora_config)
