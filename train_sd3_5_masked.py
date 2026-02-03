@@ -48,13 +48,11 @@ def main():
     transformer.enable_gradient_checkpointing()  # Optimize VRAM
     
     # Optimizer
-    params = list(filter(lambda p: p.requires_grad, transformer.parameters()))
-import bitsandbytes as bnb
-import gc
-
-# ... (imports)
-
     # Optimizer (Use 8-bit AdamW to save VRAM)
+    import bitsandbytes as bnb
+    import gc
+    
+    # Optimizer
     params = list(filter(lambda p: p.requires_grad, transformer.parameters()))
     optimizer = bnb.optim.AdamW8bit(params, lr=args.lr)
 
