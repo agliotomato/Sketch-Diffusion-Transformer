@@ -28,6 +28,8 @@ def main():
     parser.add_argument("--mask_path", type=str, required=True, help="Path to mask image (matte)")
     parser.add_argument("--color_ref_path", type=str, required=True, help="Path to color reference (input_2)")
     parser.add_argument("--output_path", type=str, default="output_sd35_ref.png", help="Path to save result")
+    parser.add_argument("--lora_path", type=str, default=None, help="Path to trained LoRA directory (e.g. sd35_hair_lora)")
+    parser.add_argument("--lora_weight", type=float, default=1.0, help="LoRA weight scale")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--control_strength", type=float, default=0.7, help="ControlNet strength")
     
@@ -57,6 +59,16 @@ def main():
         )
     
     pipe.to(device)
+
+    # --- LOAD LORA ---
+    if args.lora_path:
+        print(f"Loading LoRA from {args.lora_path} with weight {args.lora_weight}...")
+        try:
+            pipe.load_lora_weights(args.lora_path, adapter_name="hair_style")
+            pipe.set_adapters(["hair_style"], adapter_weights=[args.lora_weight])
+            print("Successfully loaded LoRA.")
+        except Exception as e:
+            print(f"Warning: Failed to load LoRA: {e}")
 
     # --- HOOK REGISTRATION ---
     # We initialize the controller
