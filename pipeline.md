@@ -58,7 +58,7 @@
 #### 데이터 예시 (Data Example: `braid_1.png`)
 | **Image (Target)** | **Matte (Mask)** | **Sketch (Input)** |
 |:---:|:---:|:---:|
-| ![Target](dataset/braid/img/train/braid_1.png) | ![Mask](dataset/braid/matte/train/braid_1.png) | ![Sketch](dataset/braid/sketch/train/braid_1.png) |
+| ![Target](/braid_1.png) | ![Mask](/braid_1_matte.png) | ![Sketch](/braid_1_sketch.png) |
 
 ### 학습 루프 상세
 1.  **입력 처리**:
