@@ -91,8 +91,10 @@ def main():
                 
                 # ControlNet expects pixel values, not latents.
                 control_pixel = batch["conditioning_pixel_values"].to(device, dtype=torch.float16) # [-1, 1]
-                # Rescale to [0, 1] for ControlNet? Usually it takes [0,1].
-                control_input = (control_pixel + 1.0) / 2.0
+                
+                # FIX: SD3 ControlNet expects VAE latents (16 channels), not pixels (3 channels).
+                # Encode sketch to latents
+                control_input = vae.encode(control_pixel).latent_dist.sample() * vae.config.scaling_factor
                 
                 # C. Noise & Timesteps
                 noise = torch.randn_like(latents)
