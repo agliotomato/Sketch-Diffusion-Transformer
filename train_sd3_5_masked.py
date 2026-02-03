@@ -200,15 +200,17 @@ def main():
             print(f"Saved LoRA to {output_path}")
 
         # Save Loss Graph
-        plt.figure(figsize=(10, 5))
-        plt.plot(loss_history, label="Training Loss")
-        plt.xlabel("Steps")
-        plt.ylabel("Loss")
-        plt.title("Training Loss Curve")
-        plt.legend()
-        plt.grid(True)
-        plt.savefig(os.path.join(args.output_dir, "loss_graph.png"))
-        plt.close()
+        if accelerator.is_main_process:
+            os.makedirs(args.output_dir, exist_ok=True)
+            plt.figure(figsize=(10, 5))
+            plt.plot(loss_history, label="Training Loss")
+            plt.xlabel("Steps")
+            plt.ylabel("Loss")
+            plt.title("Training Loss Curve")
+            plt.legend()
+            plt.grid(True)
+            plt.savefig(os.path.join(args.output_dir, "loss_graph.png"))
+            plt.close()
 
 
 if __name__ == "__main__":
