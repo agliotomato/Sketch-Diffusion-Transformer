@@ -10,6 +10,10 @@ from peft import LoraConfig, get_peft_model
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 import numpy as np
+import matplotlib.pyplot as plt
+
+# Set backend to Agg for headless environments
+plt.switch_backend('Agg')
 
 from dataset_sd35 import HairInpaintingDataset
 
@@ -44,6 +48,7 @@ def main():
     lora_config = LoraConfig(
         r=128, lora_alpha=128, init_lora_weights="gaussian",
         target_modules=["to_k", "to_q", "to_v", "to_out.0"],
+        lora_dropout=0.05, # FIX: Add dropout to prevent overfitting with high rank
     )
     transformer.add_adapter(lora_config)
     transformer.enable_gradient_checkpointing()  # Optimize VRAM
@@ -63,7 +68,7 @@ def main():
     
     # Optimizer
     params = list(filter(lambda p: p.requires_grad, transformer.parameters()))
-    optimizer = bnb.optim.AdamW8bit(params, lr=args.lr)
+    optimizer = bnb.optim.AdamW8bit(params, lr=4e-5) # FIX: Lower LR for high rank fine-tuning
 
     # 3. Data
     dataset = HairInpaintingDataset(args.data_root, size=1024)
@@ -81,7 +86,9 @@ def main():
     controlnet.to(device, dtype=torch.float16)
 
     print(f"Start Training: {len(dataset)} images, {args.epochs} epochs")
-
+    
+    loss_history = []
+    
     for epoch in range(args.epochs):
         transformer.train()
         for step, batch in enumerate(tqdm(dataloader, desc=f"Epoch {epoch}")):
@@ -174,7 +181,11 @@ def main():
                 mask = F.interpolate(batch["masks"].to(device, dtype=torch.float16), size=loss.shape[-2:], mode="nearest")
                 
                 # FIX: Loss must be float32 for scaler stability
-                masked_loss = (loss * mask.float()).mean()
+                # FIX: Normalized Masked Loss
+                # Divide by sum of mask to avoid gradient dilution for small hair areas
+                masked_loss = (loss * mask.float()).sum() / (mask.float().sum() + 1e-6)
+                
+                loss_history.append(masked_loss.item())
                 
                 accelerator.backward(masked_loss)
                 optimizer.step()
@@ -185,7 +196,20 @@ def main():
             output_path = os.path.join(args.output_dir, f"checkpoint-{epoch}")
             os.makedirs(output_path, exist_ok=True)
             transformer.save_pretrained(output_path)
+            transformer.save_pretrained(output_path)
             print(f"Saved LoRA to {output_path}")
+
+        # Save Loss Graph
+        plt.figure(figsize=(10, 5))
+        plt.plot(loss_history, label="Training Loss")
+        plt.xlabel("Steps")
+        plt.ylabel("Loss")
+        plt.title("Training Loss Curve")
+        plt.legend()
+        plt.grid(True)
+        plt.savefig(os.path.join(args.output_dir, "loss_graph.png"))
+        plt.close()
+
 
 if __name__ == "__main__":
     main()
