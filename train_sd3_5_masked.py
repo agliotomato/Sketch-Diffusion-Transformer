@@ -164,9 +164,10 @@ def main():
                 # Resize mask to latent shape
                 mask = F.interpolate(batch["masks"].to(device, dtype=torch.float16), size=loss.shape[-2:], mode="nearest")
                 
+                # FIX: Loss must be float32 for scaler stability
                 masked_loss = (loss * mask).mean()
                 
-                accelerator.backward(masked_loss)
+                accelerator.backward(masked_loss.float())
                 optimizer.step()
                 optimizer.zero_grad()
                 
