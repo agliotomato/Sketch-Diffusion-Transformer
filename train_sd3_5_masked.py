@@ -49,6 +49,11 @@ def main():
     
     # FIX: Cast Transformer to fp16 (Base weights frozen, LoRA trained)
     transformer.to(dtype=torch.float16)
+
+    # FIX: LoRA weights (trainable) must be fp32 for stable training and scaler compatibility
+    for param in transformer.parameters():
+        if param.requires_grad:
+            param.data = param.data.to(torch.float32)
     
     # Optimizer
     # Optimizer (Use 8-bit AdamW to save VRAM)
