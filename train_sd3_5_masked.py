@@ -121,13 +121,20 @@ def main():
                 else:
                     control_hidden_states = noisy_latents
 
+                # Prepare ControlNet text args based on configuration
+                control_txt_kwargs = {}
+                if getattr(controlnet, "context_embedder", None) is not None:
+                    control_txt_kwargs = {
+                        "encoder_hidden_states": encoder_hidden_states,
+                        "pooled_projections": pooled_projections
+                    }
+
                 control_block_samples = controlnet(
                     hidden_states=control_hidden_states,
                     timestep=timesteps,
                     controlnet_cond=control_input,
-                    encoder_hidden_states=encoder_hidden_states,
-                    pooled_projections=pooled_projections,
-                    return_dict=False
+                    return_dict=False,
+                    **control_txt_kwargs
                 )[0]
                 
                 # F. Run Transformer
