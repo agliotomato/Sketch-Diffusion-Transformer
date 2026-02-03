@@ -111,8 +111,15 @@ def main():
                 pooled_projections = torch.zeros((bsz, 2048), device=device, dtype=torch.float16) # Dummy
                 
                 # E. Run ControlNet
+                # FIX: Check if ControlNet requires 3D inputs (missing pos_embed)
+                if getattr(controlnet, "pos_embed", None) is None:
+                    # Manually patchify using transformer's pos_embed
+                    control_hidden_states = transformer.pos_embed(noisy_latents)
+                else:
+                    control_hidden_states = noisy_latents
+
                 control_block_samples = controlnet(
-                    hidden_states=noisy_latents,
+                    hidden_states=control_hidden_states,
                     timestep=timesteps,
                     controlnet_cond=control_input,
                     encoder_hidden_states=encoder_hidden_states,
