@@ -96,11 +96,12 @@ def main():
                 bsz = latents.shape[0]
                 timesteps = torch.randint(0, scheduler.config.num_train_timesteps, (bsz,), device=device).long()
                 
-                # Add Noise
-                noisy_latents = scheduler.add_noise(latents, noise, timesteps)
+                # Add Noise (Manual Rectified Flow: z_t = (1-t)x + t*noise)
+                # timesteps is 0-1000. sigmas = t/1000
+                sigmas = timesteps.float() / scheduler.config.num_train_timesteps
+                sigmas = sigmas.reshape(bsz, 1, 1, 1).to(device, dtype=torch.float16)
                 
-                # D. Text Prop (Dummy)
-                # SD3 requires pooled_projections (from T5/CLIP).
+                noisy_latents = (1.0 - sigmas) * latents + sigmas * noise
                 # We need to compute embeds. For code brevity, we use zero/null embeds or cached.
                 # HACK: Create empty embeds matching shapes.
                 # In real script, load TextEncoders. Here assuming unconditioned (empty prompt) training for shape/texture alignment.
