@@ -156,18 +156,21 @@ def main():
                 
                 # Let's assume prediction is `v_pred`.
                 # Target `v` for Rectified Flow is `noise - original_latents`.
+                # Let's assume prediction is `v_pred`.
+                # Target `v` for Rectified Flow is `noise - original_latents`.
                 target = noise - latents
                 
-                loss = F.mse_loss(noise_pred, target, reduction="none")
+                # FIX: Compute Loss in Float32 for stability and to prevent Backward type errors
+                loss = F.mse_loss(noise_pred.float(), target.float(), reduction="none")
                 
                 # Apply Mask
                 # Resize mask to latent shape
                 mask = F.interpolate(batch["masks"].to(device, dtype=torch.float16), size=loss.shape[-2:], mode="nearest")
                 
                 # FIX: Loss must be float32 for scaler stability
-                masked_loss = (loss * mask).mean()
+                masked_loss = (loss * mask.float()).mean()
                 
-                accelerator.backward(masked_loss.float())
+                accelerator.backward(masked_loss)
                 optimizer.step()
                 optimizer.zero_grad()
                 
