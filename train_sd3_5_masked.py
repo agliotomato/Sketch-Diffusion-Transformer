@@ -47,6 +47,9 @@ def main():
     transformer.add_adapter(lora_config)
     transformer.enable_gradient_checkpointing()  # Optimize VRAM
     
+    # FIX: Cast Transformer to fp16 (Base weights frozen, LoRA trained)
+    transformer.to(dtype=torch.float16)
+    
     # Optimizer
     # Optimizer (Use 8-bit AdamW to save VRAM)
     import bitsandbytes as bnb
