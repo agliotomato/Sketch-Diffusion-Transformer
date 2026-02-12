@@ -257,7 +257,22 @@ def main():
                 sigmas = sigmas.reshape(bsz, 1, 1, 1).to(device, dtype=torch.float16)
                 
                 # Noisy Target (Input Channel 0-15)
-                noisy_latents = (1.0 - sigmas) * latents + sigmas * noise # Renamed to noisy_latents
+                # Apply noise ONLY to the masked region (Hair) with SOFT MASK
+                # This prevents hard edge artifacts and allows seamless blending
+                
+                # 1. Prepare Soft Mask for Noise Injection
+                # Resize mask to latent size [128, 128]
+                mask_latents = F.interpolate(masks, size=latents.shape[-2:], mode="nearest")
+                
+                # Apply Gaussian Blur to Mask (Soft Masking)
+                # We use the blur kernel from gradient_criterion
+                mask_latents_blurred = gradient_criterion.blur(mask_latents) 
+                
+                # 2. Apply Noise with Soft Mask
+                # Background (1-mask) stays clean (latents)
+                # Foreground (mask) gets noisy
+                noisy_latents_full = (1.0 - sigmas) * latents + sigmas * noise
+                noisy_latents = (1.0 - mask_latents_blurred) * latents + mask_latents_blurred * noisy_latents_full
                 
                 # ... (Keep existing CFG code) ...
                 # CFG: Drop sketch condition with prob.
@@ -293,17 +308,8 @@ def main():
                 # target = noise - latents
                 target_v = noise - latents # Renamed to target_v
                 
-                # Soft Masking for Loss
-                # Resize mask to latent size [128, 128]
-                mask_latents = F.interpolate(masks, size=latents.shape[-2:], mode="nearest")
-                
-                # Apply Soft Blur to mask boundary to allow seamless blending
-                # Simple boolean mask is usually too harsh.
-                # Let's use the provided mask (which should be soft-ish from dataset?) 
-                # If dataset returns binary, we might want to blur it here. 
-                # Assume dataset provides reasonable matte.
-                # Apply Gaussian Blur to Mask for MSE Loss
-                mask_latents_blurred = gradient_criterion.blur(mask_latents) # Use blur from criterion
+                # Soft Masking for Loss (Already calculated above)
+                # We reuse 'mask_latents_blurred' for loss weighting as well
 
                 # Calculate MSE Loss
                 loss_mse = F.mse_loss(model_pred.float(), target_v.float(), reduction="none")
