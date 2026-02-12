@@ -18,15 +18,15 @@ plt.switch_backend('Agg')
 
 from dataset_sd35 import HairInpaintingDataset
 
-def modify_x_embedder(transformer):
+def modify_pos_embed(transformer):
     """
-    Expands the input channels of the transformer's x_embedder from 16 to 32.
+    Expands the input channels of the transformer's pos_embed from 16 to 32.
     Initializes the new 16 channels with zeros (Weight Surgery).
     """
     # Channel 0-15: Noisy Latents
     # Channel 16-31: Sketch Latents
     
-    old_proj = transformer.x_embedder.proj
+    old_proj = transformer.pos_embed.proj
     
     # Create new Conv2d with 32 input channels
     new_proj = nn.Conv2d(
@@ -50,9 +50,9 @@ def modify_x_embedder(transformer):
         new_proj.bias.data = old_proj.bias.data
         
     # Replace the layer in transformer
-    transformer.x_embedder.proj = new_proj
+    transformer.pos_embed.proj = new_proj
     
-    print("Successfully modified x_embedder: 16 -> 32 channels (New channels 0-initialized).")
+    print("Successfully modified pos_embed: 16 -> 32 channels (New channels 0-initialized).")
     return transformer
 
 def main():
@@ -89,14 +89,14 @@ def main():
 
     # 2. Modify Architecture (Weight Surgery)
     # This must be done BEFORE adding LoRA
-    transformer = modify_x_embedder(transformer)
+    transformer = modify_pos_embed(transformer)
 
     # Freeze Base Model
     vae.requires_grad_(False)
     transformer.requires_grad_(False) # Default freeze all
 
-    # 3. Unfreeze x_embedder to allow learning the new sketch condition
-    transformer.x_embedder.proj.requires_grad_(True)
+    # 3. Unfreeze pos_embed to allow learning the new sketch condition
+    transformer.pos_embed.proj.requires_grad_(True)
 
     # 4. Add LoRA
     # Rank 128 for detailed hair texture
@@ -347,13 +347,13 @@ def main():
             # Save Transformer (LoRA Adapters)
             transformer.save_pretrained(output_path)
             
-            # Save Modified x_embedder manually
+            # Save Modified pos_embed manually
             # Since PEFT save_pretrained only saves adapters, we need to save the modified input layer
             # so we can reload it properly for inference.
-            x_embedder_state = transformer.unwrap_model(transformer).x_embedder.state_dict()
-            torch.save(x_embedder_state, os.path.join(output_path, "x_embedder_weights.pt"))
+            pos_embed_state = transformer.unwrap_model(transformer).pos_embed.state_dict()
+            torch.save(pos_embed_state, os.path.join(output_path, "pos_embed_weights.pt"))
             
-            print(f"Saved Checkpoint & x_embedder to {output_path}")
+            print(f"Saved Checkpoint & pos_embed to {output_path}")
 
         # Plot Loss
         if accelerator.is_main_process:
