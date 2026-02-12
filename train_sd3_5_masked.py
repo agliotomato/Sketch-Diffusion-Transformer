@@ -63,7 +63,7 @@ def main():
     parser.add_argument("--num_epochs", type=int, default=10)
     parser.add_argument("--learning_rate", type=float, default=1e-4)
     parser.add_argument("--gradient_accumulation_steps", type=int, default=4)
-    parser.add_argument("--model_name", type=str, default="stabilityai/stable-diffusion-3.5-large")
+    parser.add_argument("--model_name", type=str, default="stabilityai/stable-diffusion-3.5-medium")
     parser.add_argument("--category", type=str, default=None, 
                        help="Dataset category to use (e.g., 'braid', 'unbraid'). Default: None (Load both if available)")
     parser.add_argument("--lambda_shape", type=float, default=0.0, 
