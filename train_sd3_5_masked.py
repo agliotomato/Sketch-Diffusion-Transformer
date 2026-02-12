@@ -362,7 +362,24 @@ def main():
             # Save Modified pos_embed manually
             # Since PEFT save_pretrained only saves adapters, we need to save the modified input layer
             # so we can reload it properly for inference.
-            pos_embed_state = transformer.unwrap_model(transformer).pos_embed.state_dict()
+            # Save Modified pos_embed manually
+            # Since PEFT save_pretrained only saves adapters, we need to save the modified input layer
+            # so we can reload it properly for inference.
+            # We must use proper unwrap method from Accelerator
+            unwrapped_model = accelerator.unwrap_model(transformer)
+            # If PeftModel, we might need to access .base_model.model?
+            # PeftModel usually forwards unknown attrs. Let's try direct access first.
+            if hasattr(unwrapped_model, 'pos_embed'):
+                pos_embed_state = unwrapped_model.pos_embed.state_dict()
+            else:
+                # If unwrapped is PeftModel and pos_embed is not forwarded correctly (it should be though)
+                # Try accessing base_model (PeftModel -> base_model -> model -> pos_embed)
+                # But actually PeftModel usually has base_model attribute.
+                # Let's hope direct access works or fall back.
+                # Wait, error was AttributeError "SD3Transformer2DModel object has no attribute 'unwrap_model'".
+                # This confirms transformer was indeed wrapper which forwarded to base.
+                # So unwrapped_model via accelerator should be fine.
+                pos_embed_state = unwrapped_model.pos_embed.state_dict()
             torch.save(pos_embed_state, os.path.join(output_path, "pos_embed_weights.pt"))
             
             print(f"Saved Checkpoint & pos_embed to {output_path}")
