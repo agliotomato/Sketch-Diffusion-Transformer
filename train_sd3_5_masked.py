@@ -72,6 +72,9 @@ def main():
                        help="Space to calculate Gradient Loss: 'latent' (faster) or 'pixel' (better for braids).")
     
     args = parser.parse_args()
+    
+    # Create Output Directory
+    os.makedirs(args.output_dir, exist_ok=True)
 
     # Log Stage
     if args.lambda_shape > 0:
