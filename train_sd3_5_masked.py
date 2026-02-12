@@ -235,7 +235,7 @@ def main():
             with accelerator.accumulate(transformer):
                 pixel_values = batch["pixel_values"].to(accelerator.device, dtype=torch.float16) # [B, 3, 1024, 1024]
                 masks = batch["masks"].to(accelerator.device, dtype=torch.float16) # [B, 1, 1024, 1024]
-                sketches = batch["sketches"].to(accelerator.device, dtype=torch.float16) # [B, 3, 1024, 1024]
+                sketches = batch["conditioning_pixel_values"].to(accelerator.device, dtype=torch.float16) # [B, 3, 1024, 1024]
 
                 # ... (Keep existing latent encoding code) ...
                 # VAE Encoding (Latents)
