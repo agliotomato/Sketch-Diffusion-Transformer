@@ -105,8 +105,8 @@ def main():
         lora_alpha=128,
         init_lora_weights="gaussian",
         target_modules=[
-            "to_q", "to_k", "to_v", "to_out.0",
-            "add_k_proj", "add_v_proj", "add_q_proj", "to_add_out"
+            "attn.to_q", "attn.to_k", "attn.to_v", "attn.to_out.0",
+            "attn.add_k_proj", "attn.add_v_proj", "attn.add_q_proj", "attn.to_add_out"
         ],
         layers_to_transform=[i for i in range(24)], # Apply LoRA to all 24 transformer blocks
         lora_dropout=0.05,
