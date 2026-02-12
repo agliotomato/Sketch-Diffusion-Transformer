@@ -8,36 +8,58 @@ from torch.utils.data import Dataset
 from torchvision import transforms
 
 class HairInpaintingDataset(Dataset):
-    def __init__(self, data_root, size=1024, mode="train"):
+    def __init__(self, data_root, size=1024, mode="train", category=None):
         self.data_root = data_root
         self.size = size
         self.mode = mode
+        self.category = category
         
-        # Paths assuming SketchHairSalon structure
-        # data_root/img (Target)
-        # data_root/matte (Mask)
-        # data_root/sketch (Color Sketch - assuming this folder contains the color-coded sketches)
-        
-        # Note: User mentioned "Color Sketch" is the input. 
-        # In the provided 'data/color_coding.py', it generates this on the fly or saves it?
-        # The user said "I received img, matte, and color sketch". 
-        # So we assume there is a folder for 'color_sketch' OR we generate it if only raw sketch exists.
-        # Let's assume there is a folder named 'sketch' which contains the color sketches based on user context,
-        # or we might need to assume 'input_1' style naming.
-        # Let's verify directory structure later, but for now standard names:
-        
-        self.img_dir = os.path.join(data_root, "img", mode)
-        self.mask_dir = os.path.join(data_root, "matte", mode)
-        self.cond_dir = os.path.join(data_root, "sketch", mode) # Color Sketch
-        
-        # Collect files
-        self.image_names = [f for f in os.listdir(self.img_dir) if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
-        self.image_names.sort()
+        self.image_paths = []
+        self.mask_paths = []
+        self.cond_paths = []
+
+        # Determine categories to load
+        # specific category: ['braid'] or ['unbraid']
+        # None (all): ['braid', 'unbraid'] if present, else look in root
+        if category:
+            categories = [category]
+        else:
+            # Check for subdirectories
+            subdirs = [d for d in os.listdir(data_root) if os.path.isdir(os.path.join(data_root, d))]
+            if "braid" in subdirs or "unbraid" in subdirs:
+                categories = [d for d in subdirs if d in ["braid", "unbraid"]]
+            else:
+                categories = ["."] # Root
+
+        for cat in categories:
+            if cat == ".":
+                cat_root = data_root
+            else:
+                cat_root = os.path.join(data_root, cat)
+            
+            img_dir = os.path.join(cat_root, "img", mode)
+            mask_dir = os.path.join(cat_root, "matte", mode)
+            cond_dir = os.path.join(cat_root, "sketch", mode)
+            
+            if not os.path.exists(img_dir):
+                print(f"Warning: {img_dir} does not exist. Skipping category {cat}")
+                continue
+
+            names = [f for f in os.listdir(img_dir) if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
+            names.sort()
+            
+            for name in names:
+                self.image_paths.append(os.path.join(img_dir, name))
+                self.mask_paths.append(os.path.join(mask_dir, name))
+                self.cond_paths.append(os.path.join(cond_dir, name))
+
+        if len(self.image_paths) == 0:
+            print(f"Warning: No images found in {data_root} with structure {{braid/unbraid}}/img/{mode} or direct img/{mode}")
 
         self.transform = transforms.Compose([
             transforms.Resize((size, size), interpolation=transforms.InterpolationMode.BILINEAR),
             transforms.ToTensor(),
-            transforms.Normalize([0.5], [0.5]), # [-1, 1] for SD
+            transforms.Normalize([0.5], [0.5]), 
         ])
         
         self.mask_transform = transforms.Compose([
@@ -46,21 +68,18 @@ class HairInpaintingDataset(Dataset):
         ])
 
     def __len__(self):
-        return len(self.image_names)
+        return len(self.image_paths)
 
     def __getitem__(self, idx):
-        img_name = self.image_names[idx]
-        
         # Load Images
-        img_path = os.path.join(self.img_dir, img_name)
-        mask_path = os.path.join(self.mask_dir, img_name)
-        cond_path = os.path.join(self.cond_dir, img_name)
+        img_path = self.image_paths[idx]
+        mask_path = self.mask_paths[idx]
+        cond_path = self.cond_paths[idx]
         
         # 1. Target Image (RGB)
         target_img = Image.open(img_path).convert("RGB")
         
         # 2. Mask (L)
-        # Mask needs to be 1 for Hair (Loss region), 0 for Face (No Loss).
         if os.path.exists(mask_path):
             mask_img = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)
             if mask_img is None:
@@ -71,17 +90,10 @@ class HairInpaintingDataset(Dataset):
             mask_img = np.zeros((self.size, self.size), dtype=np.uint8) + 255
             
         # Soft Masking Strategy
-        # 1. Binarize
         _, mask_bin = cv2.threshold(mask_img, 127, 255, cv2.THRESH_BINARY)
-        
-        # 2. Dilate (Expand Headerline) - Kernel 15 (~1.5% of 1024px)
         kernel = np.ones((15, 15), np.uint8)
         mask_dilated = cv2.dilate(mask_bin, kernel, iterations=1)
-        
-        # 3. Blur (Soften Edges) - Sigma 10
         mask_soft = cv2.GaussianBlur(mask_dilated, (0, 0), sigmaX=10)
-        
-        # 4. Normalize to [0, 1]
         mask_tensor = torch.from_numpy(mask_soft.astype(np.float32) / 255.0).unsqueeze(0)
 
         # 3. Condition Image (Color Sketch) (RGB)
@@ -93,11 +105,10 @@ class HairInpaintingDataset(Dataset):
         # Apply Transforms
         pixel_values = self.transform(target_img)
         conditioning_pixel_values = self.transform(cond_img)
-        # mask = self.mask_transform(mask_img) # Removed: We did manual transform
         
         return {
-            "pixel_values": pixel_values,      # Target (Original)
-            "conditioning_pixel_values": conditioning_pixel_values, # Input (Color Sketch)
-            "masks": mask_tensor,             # Soft Loss Mask
-            "prompt": "A hairstyle"           # Dummy prompt (or load from txt if avail)
+            "pixel_values": pixel_values,      
+            "conditioning_pixel_values": conditioning_pixel_values, 
+            "masks": mask_tensor,             
+            "prompt": "A hairstyle"           
         }

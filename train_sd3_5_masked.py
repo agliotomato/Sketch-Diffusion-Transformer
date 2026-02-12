@@ -1,217 +1,371 @@
-
 import argparse
 import os
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
 from accelerate import Accelerator
-from diffusers import SD3ControlNetModel, SD3Transformer2DModel, AutoencoderKL, FlowMatchEulerDiscreteScheduler
-from diffusers.optimization import get_scheduler
+from diffusers import SD3Transformer2DModel, AutoencoderKL, FlowMatchEulerDiscreteScheduler
 from peft import LoraConfig, get_peft_model
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 import numpy as np
 import matplotlib.pyplot as plt
+import copy
+import random
 
 # Set backend to Agg for headless environments
 plt.switch_backend('Agg')
 
 from dataset_sd35 import HairInpaintingDataset
 
+def modify_x_embedder(transformer):
+    """
+    Expands the input channels of the transformer's x_embedder from 16 to 32.
+    Initializes the new 16 channels with zeros (Weight Surgery).
+    """
+    # Channel 0-15: Noisy Latents
+    # Channel 16-31: Sketch Latents
+    
+    old_proj = transformer.x_embedder.proj
+    
+    # Create new Conv2d with 32 input channels
+    new_proj = nn.Conv2d(
+        in_channels=32,
+        out_channels=old_proj.out_channels,
+        kernel_size=old_proj.kernel_size,
+        stride=old_proj.stride,
+        padding=old_proj.padding,
+        bias=old_proj.bias is not None
+    )
+    
+    # Initialize weights
+    # 1. Copy original weights to first 16 channels (Preserve Pre-trained Knowledge)
+    new_proj.weight.data[:, :16, :, :] = old_proj.weight.data
+    
+    # 2. Zero-init new 16 channels (Weight Surgery for gradual adaptation)
+    new_proj.weight.data[:, 16:, :, :] = 0.0
+    
+    # Copy bias if exists
+    if old_proj.bias is not None:
+        new_proj.bias.data = old_proj.bias.data
+        
+    # Replace the layer in transformer
+    transformer.x_embedder.proj = new_proj
+    
+    print("Successfully modified x_embedder: 16 -> 32 channels (New channels 0-initialized).")
+    return transformer
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--data_root", type=str, required=True)
-    parser.add_argument("--output_dir", type=str, default="sd35_hair_lora")
+    parser.add_argument("--output_dir", type=str, default="sd35_sketch_hair_lora")
     parser.add_argument("--batch_size", type=int, default=1)
-    parser.add_argument("--epochs", type=int, default=10)
-    parser.add_argument("--lr", type=float, default=1e-4)
+    parser.add_argument("--num_epochs", type=int, default=10)
+    parser.add_argument("--learning_rate", type=float, default=1e-4)
+    parser.add_argument("--gradient_accumulation_steps", type=int, default=4)
+    parser.add_argument("--model_name", type=str, default="stabilityai/stable-diffusion-3.5-large")
+    parser.add_argument("--category", type=str, default=None, 
+                       help="Dataset category to use (e.g., 'braid', 'unbraid'). Default: None (Load both if available)")
+    parser.add_argument("--lambda_shape", type=float, default=0.0, 
+                       help="Weight for Shape Reconstruction Loss (Gradient Loss).")
+    parser.add_argument("--loss_space", type=str, default="latent", choices=["latent", "pixel"],
+                       help="Space to calculate Gradient Loss: 'latent' (faster) or 'pixel' (better for braids).")
+    
     args = parser.parse_args()
 
-    accelerator = Accelerator(mixed_precision="fp16", gradient_accumulation_steps=4)
+    # Log Stage
+    if args.lambda_shape > 0:
+        print(f"Running Specialization Stage: Lambda Shape {args.lambda_shape} in {args.loss_space} Space")
+    else:
+        print("Running Generalization Stage: lambda_shape = 0")
+
+    accelerator = Accelerator(mixed_precision="fp16", gradient_accumulation_steps=args.gradient_accumulation_steps)
     device = accelerator.device
 
     # 1. Load Models
-    model_id = "stabilityai/stable-diffusion-3.5-large"
-    controlnet_id = "stabilityai/stable-diffusion-3.5-large-controlnet-canny"
-    
-    vae = AutoencoderKL.from_pretrained(model_id, subfolder="vae")
-    transformer = SD3Transformer2DModel.from_pretrained(model_id, subfolder="transformer")
-    controlnet = SD3ControlNetModel.from_pretrained(controlnet_id)
-    scheduler = FlowMatchEulerDiscreteScheduler.from_pretrained(model_id, subfolder="scheduler")
+    vae = AutoencoderKL.from_pretrained(args.model_name, subfolder="vae", torch_dtype=torch.float16)
+    transformer = SD3Transformer2DModel.from_pretrained(args.model_name, subfolder="transformer", torch_dtype=torch.float16)
+    scheduler = FlowMatchEulerDiscreteScheduler.from_pretrained(args.model_name, subfolder="scheduler")
 
-    # Freeze Base
+    # 2. Modify Architecture (Weight Surgery)
+    # This must be done BEFORE adding LoRA
+    transformer = modify_x_embedder(transformer)
+
+    # Freeze Base Model
     vae.requires_grad_(False)
-    transformer.requires_grad_(False)
-    controlnet.requires_grad_(False)
+    transformer.requires_grad_(False) # Default freeze all
 
-    # 2. Add LoRA to Transformer
-    # FIX: Increase Rank to 128 for better hair texture details
+    # 3. Unfreeze x_embedder to allow learning the new sketch condition
+    transformer.x_embedder.proj.requires_grad_(True)
+
+    # 4. Add LoRA
+    # Rank 128 for detailed hair texture
     lora_config = LoraConfig(
-        r=128, lora_alpha=128, init_lora_weights="gaussian",
+        r=128,
+        lora_alpha=128,
+        init_lora_weights="gaussian",
         target_modules=["to_k", "to_q", "to_v", "to_out.0"],
-        lora_dropout=0.05, # FIX: Add dropout to prevent overfitting with high rank
+        layers_to_transform=[i for i in range(24)], # Apply LoRA to all 24 transformer blocks
+        lora_dropout=0.05,
     )
-    transformer.add_adapter(lora_config)
-    transformer.enable_gradient_checkpointing()  # Optimize VRAM
-    
-    # FIX: Cast Transformer to fp16 (Base weights frozen, LoRA trained)
-    transformer.to(dtype=torch.float16)
+    transformer = get_peft_model(transformer, lora_config) # Use get_peft_model
+    transformer.enable_gradient_checkpointing() # Optimize VRAM
 
-    # FIX: LoRA weights (trainable) must be fp32 for stable training and scaler compatibility
+    # Cast Transformer to fp16
+    # Note: accelerate handles mixed precision, but explicit cast helps with some layers if not fully handled
+    transformer.to(device, dtype=torch.float16)
+
+    # Ensure trainable params are fp32 for stability
     for param in transformer.parameters():
         if param.requires_grad:
             param.data = param.data.to(torch.float32)
-    
-    # Optimizer
-    # Optimizer (Use 8-bit AdamW to save VRAM)
-    import bitsandbytes as bnb
-    import gc
-    
-    # Optimizer
-    params = list(filter(lambda p: p.requires_grad, transformer.parameters()))
-    optimizer = bnb.optim.AdamW8bit(params, lr=4e-5) # FIX: Lower LR for high rank fine-tuning
 
-    # 3. Data
-    dataset = HairInpaintingDataset(args.data_root, size=1024)
+    # Optimizer (8-bit AdamW)
+    import bitsandbytes as bnb
+    params = list(filter(lambda p: p.requires_grad, transformer.parameters()))
+    optimizer = bnb.optim.AdamW8bit(params, lr=args.learning_rate) # Use args.learning_rate
+
+    # Datasets
+    dataset = HairInpaintingDataset(args.data_root, size=1024, category=args.category) # Added category
     dataloader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True)
 
-    # Clear cache before training start
-    torch.cuda.empty_cache()
-    gc.collect()
-
-    transformer, optimizer, dataloader, controlnet = accelerator.prepare(
-        transformer, optimizer, dataloader, controlnet
+    # Prepare with Accelerator
+    transformer, optimizer, dataloader = accelerator.prepare(
+        transformer, optimizer, dataloader
     )
-    # Fix Dtype Mismatch: Cast VAE and ControlNet to fp16
     vae.to(device, dtype=torch.float16)
-    controlnet.to(device, dtype=torch.float16)
 
-    print(f"Start Training: {len(dataset)} images, {args.epochs} epochs")
-    
+    class GradientLoss(torch.nn.Module):
+        def __init__(self, mode="latent", vae=None):
+            super().__init__()
+            self.mode = mode
+            self.vae = vae
+            
+            # Sobel kernel
+            kernel_x = torch.tensor([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]], dtype=torch.float32).unsqueeze(0).unsqueeze(0)
+            kernel_y = torch.tensor([[-1, -2, -1], [0, 0, 0], [1, 2, 1]], dtype=torch.float32).unsqueeze(0).unsqueeze(0)
+            self.register_buffer("kernel_x", kernel_x)
+            self.register_buffer("kernel_y", kernel_y)
+            
+            # Gaussian Kernel for mask blurring (Sigma 10 approx)
+            # Create a large kernel size to support sigma 10 (size ~ 6*sigma)
+            from torchvision.transforms import GaussianBlur
+            self.blur = GaussianBlur(kernel_size=(61, 61), sigma=10.0)
+
+        def get_gradients(self, img):
+            b, c, h, w = img.shape
+            img_reshaped = img.view(b * c, 1, h, w)
+            
+            grad_x = torch.nn.functional.conv2d(img_reshaped, self.kernel_x, padding=1)
+            grad_y = torch.nn.functional.conv2d(img_reshaped, self.kernel_y, padding=1)
+            
+            grad = torch.sqrt(grad_x**2 + grad_y**2 + 1e-6)
+            return grad.view(b, c, h, w)
+
+        def forward(self, pred, target, mask=None, z_t=None, sigmas=None):
+            # Input Handling
+            if self.mode == "pixel":
+                # Reconstruct z0: x_pred = z_t - sigma * v_pred
+                # pred is v_pred
+                z0_pred = z_t - sigmas * pred
+                # Target z0 is implicitly 'target' which was passed as 'latents' (original) in this branch?
+                # Wait, caller passes 'target' as 'noise - latents' (velocity) usually.
+                # If we want Pixel Loss, we need the GT Image or GT Latent.
+                # Let's adjust call signature in training loop or reconstruct here.
+                
+                # We need to decode z0_pred.
+                # VAE Decode requires float32 sometimes or good precision.
+                # Provide VAE in eval mode.
+                
+                # Decode Prediction
+                z0_pred_scaled = z0_pred / self.vae.config.scaling_factor
+                pixel_pred = self.vae.decode(z0_pred_scaled, return_dict=False)[0]
+                
+                # Decode Target (We assume target passed here is the GT Latent for Pixel Mode flexibility, 
+                # OR we reconstruct GT from inputs. 
+                # Actually, easier to pass GT Latents as 'target' if mode is pixel from the loop.
+                # Let's handle 'target' argument polymorphism in the loop.)
+                target_scaled = target / self.vae.config.scaling_factor
+                pixel_gt = self.vae.decode(target_scaled, return_dict=False)[0]
+                
+                # Calculate Gradients in Pixel Space
+                grad_pred = self.get_gradients(pixel_pred)
+                grad_gt = self.get_gradients(pixel_gt)
+                
+                # Resize Mask to Pixel Space
+                if mask is not None:
+                    mask = F.interpolate(mask, size=pixel_pred.shape[-2:], mode="nearest")
+                    # Apply Gaussian Blur to Mask here if not already done?
+                    # User requested Soft Masking. We can do it here or earlier.
+                    # Let's apply it here to ensure it affects the loss weights.
+                    mask = self.blur(mask)
+            
+            else: # Latent Space
+                grad_pred = self.get_gradients(pred)
+                grad_gt = self.get_gradients(target)
+                
+                if mask is not None:
+                    mask = F.interpolate(mask, size=pred.shape[-2:], mode="nearest")
+                    mask = self.blur(mask)
+
+            loss = torch.abs(grad_pred - grad_gt)
+            
+            if mask is not None:
+                loss = (loss * mask).sum() / (mask.sum() * loss.shape[1] + 1e-6)
+            else:
+                loss = loss.mean()
+                
+            return loss
+
+    gradient_criterion = GradientLoss(mode=args.loss_space, vae=vae).to(accelerator.device) # Pass vae and mode
+
+    print(f"Start Training: {len(dataset)} images, {args.num_epochs} epochs") # Use args.num_epochs
+    print(f"  - Category: {args.category if args.category else 'All'}")
+    print(f"  - Lambda Shape: {args.lambda_shape}")
+    print(f"  - Loss Space: {args.loss_space}")
     loss_history = []
-    
-    for epoch in range(args.epochs):
+
+    for epoch in range(args.num_epochs): # Use args.num_epochs
         transformer.train()
+        epoch_loss = 0
         for step, batch in enumerate(tqdm(dataloader, desc=f"Epoch {epoch}")):
             with accelerator.accumulate(transformer):
-                # A. Latents
-                latents = vae.encode(batch["pixel_values"].to(device, dtype=torch.float16)).latent_dist.sample() * vae.config.scaling_factor
-                
-                # B. ControlNet Input (Color Sketch -> Canny Edge simulation or direct?)
-                # Since we use Canny ControlNet, it expects 0-1 range Canny map.
-                # User's Color Sketch is RGB. Let's pass it directly as structural guidance (ControlNet is robust).
-                # Or ideally, convert to Grayscale/Canny inside dataset. 
-                # For now, create control latents/features.
-                
-                # ControlNet expects pixel values, not latents.
-                control_pixel = batch["conditioning_pixel_values"].to(device, dtype=torch.float16) # [-1, 1]
-                
-                # FIX: SD3 ControlNet expects VAE latents (16 channels), not pixels (3 channels).
-                # Encode sketch to latents
-                control_input = vae.encode(control_pixel).latent_dist.sample() * vae.config.scaling_factor
-                
-                # C. Noise & Timesteps
+                pixel_values = batch["pixel_values"].to(accelerator.device, dtype=torch.float16) # [B, 3, 1024, 1024]
+                masks = batch["masks"].to(accelerator.device, dtype=torch.float16) # [B, 1, 1024, 1024]
+                sketches = batch["sketches"].to(accelerator.device, dtype=torch.float16) # [B, 3, 1024, 1024]
+
+                # ... (Keep existing latent encoding code) ...
+                # VAE Encoding (Latents)
+                with torch.no_grad():
+                    # 1. Image Latents [B, 16, 128, 128]
+                    latents = vae.encode(pixel_values).latent_dist.sample() * vae.config.scaling_factor
+                    
+                    # 2. Sketch Latents [B, 16, 128, 128]
+                    sketch_latents = vae.encode(sketches).latent_dist.sample() * vae.config.scaling_factor
+
+                # Noise & Timesteps
                 noise = torch.randn_like(latents)
                 bsz = latents.shape[0]
-                timesteps = torch.randint(0, scheduler.config.num_train_timesteps, (bsz,), device=device).long()
-                
-                # Add Noise (Manual Rectified Flow: z_t = (1-t)x + t*noise)
-                # timesteps is 0-1000. sigmas = t/1000
+                timesteps = torch.randint(0, scheduler.config.num_train_timesteps, (bsz,), device=latents.device).long()
+
+                # Add noise (Forward Diffusion)
+                # Manual Rectified Flow Noise Addition
                 sigmas = timesteps.float() / scheduler.config.num_train_timesteps
                 sigmas = sigmas.reshape(bsz, 1, 1, 1).to(device, dtype=torch.float16)
                 
-                noisy_latents = (1.0 - sigmas) * latents + sigmas * noise
-                # We need to compute embeds. For code brevity, we use zero/null embeds or cached.
-                # HACK: Create empty embeds matching shapes.
-                # In real script, load TextEncoders. Here assuming unconditioned (empty prompt) training for shape/texture alignment.
-                # Or better: pre-compute them.
-                # For this script to work without loading 10GB Text Encoders, we create dummy tensors.
-                encoder_hidden_states = torch.zeros((bsz, 77, 4096), device=device, dtype=torch.float16) # Dummy
-                pooled_projections = torch.zeros((bsz, 2048), device=device, dtype=torch.float16) # Dummy
+                # Noisy Target (Input Channel 0-15)
+                noisy_latents = (1.0 - sigmas) * latents + sigmas * noise # Renamed to noisy_latents
                 
-                # E. Run ControlNet
-                # FIX: Check if ControlNet requires 3D inputs (missing pos_embed)
-                if getattr(controlnet, "pos_embed", None) is None:
-                    # Manually patchify using transformer's pos_embed
-                    control_hidden_states = transformer.pos_embed(noisy_latents)
-                else:
-                    control_hidden_states = noisy_latents
+                # ... (Keep existing CFG code) ...
+                # CFG: Drop sketch condition with prob.
+                if random.random() < 0.15:
+                    sketch_latents = torch.zeros_like(sketch_latents)
 
-                # Prepare ControlNet text args based on configuration
-                control_txt_kwargs = {"pooled_projections": pooled_projections}
-                
-                # Only provide encoder_hidden_states if context_embedder is present
-                if getattr(controlnet, "context_embedder", None) is not None:
-                    control_txt_kwargs["encoder_hidden_states"] = encoder_hidden_states
+                # Concatenate Inputs (32 channels)
+                model_input = torch.cat([noisy_latents, sketch_latents], dim=1)
 
-                control_block_samples = controlnet(
-                    hidden_states=control_hidden_states,
+                # Prediction (v_prediction or epsilon)
+                # Dummy text embeddings (Unconditional training focus on structure/texture)
+                encoder_hidden_states = torch.zeros((bsz, 77, 4096), device=device, dtype=torch.float16)
+                pooled_projections = torch.zeros((bsz, 2048), device=device, dtype=torch.float16)
+
+                model_pred = transformer(
+                    hidden_states=model_input,
                     timestep=timesteps,
-                    controlnet_cond=control_input,
-                    return_dict=False,
-                    **control_txt_kwargs
-                )[0]
-                
-                # F. Run Transformer
-                noise_pred = transformer(
-                    hidden_states=noisy_latents,
-                    timestep=timesteps,
-                    encoder_hidden_states=encoder_hidden_states,
+                    encoder_hidden_states=encoder_hidden_states, 
                     pooled_projections=pooled_projections,
-                    block_controlnet_hidden_states=control_block_samples,
                     return_dict=False
                 )[0]
+
+                # Ground Truth (Target)
+                # Flow Matching: target = noise - latents (or similar, widely used in SD3)
+                # But we use scheduler.get_velocity() or similar if available. 
+                # For simplicity, let's assume `model_pred` tries to verify `noise` (if epsilon) or `v`
+                # In SD3, usually target is calculated based on noise/original. 
+                # Let's rely on Diffuser's simplistic assumption for now or calculate v manually:
+                # v_t = alpha_t * noise - sigma_t * x_0 (approx)
+                # Standard practice:
                 
-                # G. Masked Loss
-                # Flow Matching Target: v = noise - latents (usually). 
-                # Diffusers 'flow_match_euler' -> target is (noise - latents) or similar.
-                # Simple MSE against 'noise' (for epsilon prediction) or velocity.
-                # SD3 predicts 'flow'. v_t = u_t.
+                # If scheduler is FlowMatchEulerDiscreteScheduler (SD3)
+                # target = noise - latents
+                target_v = noise - latents # Renamed to target_v
                 
-                # Let's assume prediction is `v_pred`.
-                # Target `v` for Rectified Flow is `noise - original_latents`.
-                # Let's assume prediction is `v_pred`.
-                # Target `v` for Rectified Flow is `noise - original_latents`.
-                target = noise - latents
+                # Soft Masking for Loss
+                # Resize mask to latent size [128, 128]
+                mask_latents = F.interpolate(masks, size=latents.shape[-2:], mode="nearest")
                 
-                # FIX: Compute Loss in Float32 for stability and to prevent Backward type errors
-                loss = F.mse_loss(noise_pred.float(), target.float(), reduction="none")
+                # Apply Soft Blur to mask boundary to allow seamless blending
+                # Simple boolean mask is usually too harsh.
+                # Let's use the provided mask (which should be soft-ish from dataset?) 
+                # If dataset returns binary, we might want to blur it here. 
+                # Assume dataset provides reasonable matte.
+                # Apply Gaussian Blur to Mask for MSE Loss
+                mask_latents_blurred = gradient_criterion.blur(mask_latents) # Use blur from criterion
+
+                # Calculate MSE Loss
+                loss_mse = F.mse_loss(model_pred.float(), target_v.float(), reduction="none")
+                loss_mse = (loss_mse * mask_latents_blurred).sum() / (mask_latents_blurred.sum() * model_pred.shape[1] + 1e-6)
                 
-                # Apply Mask
-                # Resize mask to latent shape
-                mask = F.interpolate(batch["masks"].to(device, dtype=torch.float16), size=loss.shape[-2:], mode="nearest")
+                # Shape Reconstruction Loss (Gradient Loss)
+                loss_shape = torch.tensor(0.0, device=accelerator.device)
+                if args.lambda_shape > 0:
+                    if args.loss_space == "pixel":
+                        loss_shape = gradient_criterion(
+                            pred=model_pred.float(), 
+                            target=latents.float(), # GT Latents for Pixel comparison (decoded inside)
+                            mask=batch["masks"].to(device, dtype=torch.float16), # High-res mask
+                            z_t=noisy_latents.float(), 
+                            sigmas=sigmas.float()
+                        )
+                    else: # Latent Space
+                        loss_shape = gradient_criterion(
+                            pred=model_pred.float(), 
+                            target=target_v.float(), 
+                            mask=mask_latents # Pass unblurred mask_latents to gradient_criterion, it will blur it
+                        )
                 
-                # FIX: Loss must be float32 for scaler stability
-                # FIX: Normalized Masked Loss
-                # Divide by sum of mask to avoid gradient dilution for small hair areas
-                masked_loss = (loss * mask.float()).sum() / (mask.float().sum() + 1e-6)
-                
-                loss_history.append(masked_loss.item())
-                
-                accelerator.backward(masked_loss)
+                # Total Loss
+                loss = loss_mse + args.lambda_shape * loss_shape
+
+                # Backprop
+                accelerator.backward(loss)
                 optimizer.step()
                 optimizer.zero_grad()
                 
+                epoch_loss += loss.item()
+
+        avg_loss = epoch_loss / len(dataloader)
+        loss_history.append(avg_loss)
+        print(f"Epoch {epoch+1}/{args.num_epochs} - Loss: {avg_loss:.4f} (MSE: {loss_mse.item():.4f}, Shape: {loss_shape.item():.4f})") # Use args.num_epochs
+
         # Save Checkpoint
         if (epoch + 1) % 5 == 0:
-            output_path = os.path.join(args.output_dir, f"checkpoint-{epoch}")
+            stage_name = 'stage2' if args.lambda_shape > 0 else 'stage1'
+            output_path = os.path.join(args.output_dir, f"{stage_name}_checkpoint-{epoch+1}") # Added stage_name
             os.makedirs(output_path, exist_ok=True)
+            
+            # Save Transformer (LoRA Adapters)
             transformer.save_pretrained(output_path)
-            transformer.save_pretrained(output_path)
-            print(f"Saved LoRA to {output_path}")
+            
+            # Save Modified x_embedder manually
+            # Since PEFT save_pretrained only saves adapters, we need to save the modified input layer
+            # so we can reload it properly for inference.
+            x_embedder_state = transformer.unwrap_model(transformer).x_embedder.state_dict()
+            torch.save(x_embedder_state, os.path.join(output_path, "x_embedder_weights.pt"))
+            
+            print(f"Saved Checkpoint & x_embedder to {output_path}")
 
-        # Save Loss Graph
+        # Plot Loss
         if accelerator.is_main_process:
-            os.makedirs(args.output_dir, exist_ok=True)
             plt.figure(figsize=(10, 5))
             plt.plot(loss_history, label="Training Loss")
             plt.xlabel("Steps")
             plt.ylabel("Loss")
-            plt.title("Training Loss Curve")
+            plt.title(f"Training Loss ({args.loss_space} gradient)")
             plt.legend()
             plt.grid(True)
             plt.savefig(os.path.join(args.output_dir, "loss_graph.png"))
             plt.close()
-
 
 if __name__ == "__main__":
     main()
