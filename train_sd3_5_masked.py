@@ -222,6 +222,8 @@ def main():
                 
                 # Decode Prediction
                 z0_pred_scaled = z0_pred / self.vae.config.scaling_factor
+                # Ensure dtype matches VAE (float16)
+                z0_pred_scaled = z0_pred_scaled.to(self.vae.dtype)
                 pixel_pred = self.vae.decode(z0_pred_scaled, return_dict=False)[0]
                 
                 # Decode Target (We assume target passed here is the GT Latent for Pixel Mode flexibility, 
@@ -229,11 +231,13 @@ def main():
                 # Actually, easier to pass GT Latents as 'target' if mode is pixel from the loop.
                 # Let's handle 'target' argument polymorphism in the loop.)
                 target_scaled = target / self.vae.config.scaling_factor
+                # Ensure dtype matches VAE (float16)
+                target_scaled = target_scaled.to(self.vae.dtype)
                 pixel_gt = self.vae.decode(target_scaled, return_dict=False)[0]
                 
                 # Calculate Gradients in Pixel Space
-                grad_pred = self.get_gradients(pixel_pred)
-                grad_gt = self.get_gradients(pixel_gt)
+                grad_pred = self.get_gradients(pixel_pred.float()) # Compute grad in float32 for stability
+                grad_gt = self.get_gradients(pixel_gt.float())
                 
                 # Resize Mask to Pixel Space
                 if mask is not None:
