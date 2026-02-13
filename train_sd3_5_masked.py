@@ -70,6 +70,8 @@ def main():
                        help="Weight for Shape Reconstruction Loss (Gradient Loss).")
     parser.add_argument("--loss_space", type=str, default="latent", choices=["latent", "pixel"],
                        help="Space to calculate Gradient Loss: 'latent' (faster) or 'pixel' (better for braids).")
+    parser.add_argument("--resume_from_checkpoint", type=str, default=None,
+                       help="Path to checkpoint directory to resume from (must contain pos_embed_weights.pt and adapter weights).")
     
     args = parser.parse_args()
     
@@ -116,6 +118,41 @@ def main():
     )
     transformer = get_peft_model(transformer, lora_config) # Use get_peft_model
     transformer.enable_gradient_checkpointing() # Optimize VRAM
+
+    # Resume from Checkpoint
+    if args.resume_from_checkpoint:
+        print(f"Resuming from checkpoint: {args.resume_from_checkpoint}")
+        
+        # 1. Load LoRA Weights
+        from peft import set_peft_model_state_dict
+        from safetensors.torch import load_file
+        
+        adapter_path = os.path.join(args.resume_from_checkpoint, "adapter_model.safetensors")
+        if os.path.exists(adapter_path):
+            adapters_weights = load_file(adapter_path)
+            set_peft_model_state_dict(transformer, adapters_weights)
+            print(f"Successfully loaded LoRA weights from {adapter_path}")
+        else:
+            print(f"Warning: adapter_model.safetensors not found in {args.resume_from_checkpoint}")
+            
+        # 2. Load pos_embed Weights
+        pos_embed_path = os.path.join(args.resume_from_checkpoint, "pos_embed_weights.pt")
+        if os.path.exists(pos_embed_path):
+            pos_state_dict = torch.load(pos_embed_path, map_location="cpu")
+            # Handle PeftModel wrapping
+            # PeftModel -> base_model -> model -> pos_embed (usually)
+            # Or simplified access if attributes forwarded
+            try:
+                # Try direct loading (if forwarded)
+                transformer.pos_embed.load_state_dict(pos_state_dict)
+            except AttributeError:
+                # Fallback to internal structure
+                # This handles the case where simple forwarding doesn't work for modules
+                transformer.base_model.model.pos_embed.load_state_dict(pos_state_dict)
+                
+            print(f"Successfully loaded pos_embed weights from {pos_embed_path}")
+        else:
+            print(f"Warning: pos_embed_weights.pt not found in {args.resume_from_checkpoint}")
 
     # Cast Transformer to fp16
     # Note: accelerate handles mixed precision, but explicit cast helps with some layers if not fully handled
@@ -345,6 +382,12 @@ def main():
                 optimizer.zero_grad()
                 
                 epoch_loss += loss.item()
+                
+                # Debug Print for Zero Loss
+                if step % 100 == 0:
+                    print(f"Step {step}: Total Loss={loss.item():.6f}, MSE={loss_mse.item():.6f}, Shape={loss_shape.item():.6f}")
+                    print(f"       Mask Mean={mask_latents_blurred.mean().item():.6f}, Max={mask_latents_blurred.max().item():.6f}")
+                    print(f"       Pred Mean={model_pred.mean().item():.6f}, Target Mean={target_v.mean().item():.6f}")
 
         avg_loss = epoch_loss / len(dataloader)
         loss_history.append(avg_loss)
