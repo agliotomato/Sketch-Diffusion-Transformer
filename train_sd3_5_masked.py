@@ -258,18 +258,15 @@ def main():
             loss = torch.abs(grad_pred - grad_gt)
             
             if mask is not None:
-                # Debug prints for diagnosis
-                # Print ALWAYS for now
-                if True:
-                     print(f"[DEBUG] Loss Raw Mean: {loss.mean().item():.8f}")
-                     print(f"[DEBUG] Mask Sum: {mask.sum().item():.8f}")
-                     print(f"[DEBUG] Grad Pred Mean: {grad_pred.mean().item():.8f}, Grad GT Mean: {grad_gt.mean().item():.8f}")
-                     print(f"[DEBUG] Pixel Pred Mean: {pixel_pred.mean().item():.8f}, Pixel GT Mean: {pixel_gt.mean().item():.8f}")
-                
-                loss = (loss * mask).sum() / (mask.sum() * loss.shape[1] + 1e-6)
+                # Calculate loss in float32 to avoid overflow (Mask sum > 65504)
+                # 1024*1024 = 1ML approx, float16 max is 65k
+                loss_f32 = loss.float()
+                mask_f32 = mask.float()
+                loss = (loss_f32 * mask_f32).sum() / (mask_f32.sum() * loss.shape[1] + 1e-6)
+                loss = loss.to(pred.dtype) # Cast back to original dtype (float16 usually, or keep float32)
             else:
                 loss = loss.mean()
-                
+            
             return loss
 
     gradient_criterion = GradientLoss(mode=args.loss_space, vae=vae).to(accelerator.device) # Pass vae and mode
