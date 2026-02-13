@@ -259,7 +259,8 @@ def main():
             
             if mask is not None:
                 # Debug prints for diagnosis
-                if random.random() < 0.01: # Print occasionally
+                # Print ALWAYS for now
+                if True:
                      print(f"[DEBUG] Loss Raw Mean: {loss.mean().item():.8f}")
                      print(f"[DEBUG] Mask Sum: {mask.sum().item():.8f}")
                      print(f"[DEBUG] Grad Pred Mean: {grad_pred.mean().item():.8f}, Grad GT Mean: {grad_gt.mean().item():.8f}")
