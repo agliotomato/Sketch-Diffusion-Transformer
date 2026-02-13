@@ -222,8 +222,8 @@ def main():
                 
                 # Decode Prediction
                 z0_pred_scaled = z0_pred / self.vae.config.scaling_factor
-                # Ensure dtype matches VAE (float16)
-                z0_pred_scaled = z0_pred_scaled.to(self.vae.dtype)
+                # Ensure dtype matches VAE (float16) explicitly
+                z0_pred_scaled = z0_pred_scaled.to(torch.float16)
                 pixel_pred = self.vae.decode(z0_pred_scaled, return_dict=False)[0]
                 
                 # Decode Target (We assume target passed here is the GT Latent for Pixel Mode flexibility, 
@@ -231,8 +231,8 @@ def main():
                 # Actually, easier to pass GT Latents as 'target' if mode is pixel from the loop.
                 # Let's handle 'target' argument polymorphism in the loop.)
                 target_scaled = target / self.vae.config.scaling_factor
-                # Ensure dtype matches VAE (float16)
-                target_scaled = target_scaled.to(self.vae.dtype)
+                # Ensure dtype matches VAE (float16) explicitly
+                target_scaled = target_scaled.to(torch.float16)
                 pixel_gt = self.vae.decode(target_scaled, return_dict=False)[0]
                 
                 # Calculate Gradients in Pixel Space
