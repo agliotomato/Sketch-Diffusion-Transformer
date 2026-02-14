@@ -1,5 +1,5 @@
 # Dataset & Models
-dataset/
+dataset3/
 models/
 *.safetensors
 *.ckpt
@@ -9,7 +9,7 @@ models/
 
 # Outputs
 sd35_hair_lora/
-results/
+results3/
 logs/
 wandb/
 

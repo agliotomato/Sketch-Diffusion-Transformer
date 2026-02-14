@@ -68,19 +68,22 @@ ControlNet을 사용하지 않고, SD3.5의 입력 레이어를 수정하여 스
 
 ### A. Normalized Masked MSE Loss
 ROI(Hair)에만 집중하여 학습 효율을 극대화합니다.
-$$ L_{mse} = \frac{\sum (\| \mathbf{v}_{pred} - \mathbf{v}_{gt} \|^2 \odot \mathbf{M}_{soft})}{\sum \mathbf{M}_{soft} + \epsilon} $$
+$$
+L_{mse} = \frac{\sum (\| \mathbf{v}_{pred} - \mathbf{v}_{gt} \|^2 \odot \mathbf{M}_{soft})}{\sum \mathbf{M}_{soft} + \epsilon}
+$$
 *   **Soft Mask ($\mathbf{M}_{soft}$)**: 경계면 가중치를 부드럽게 적용하여 이질감 없는 합성 유도.
 
 ### B. Pixel-Space Gradient Loss (Structural)
 픽셀 간의 밝기 변화율(Gradient)을 비교하여 구조적 선명도를 학습합니다. (2단계에서 사용)
-$$ L_{grad} = \| \nabla(\mathbf{I}_{pred}) - \nabla(\mathbf{I}_{gt}) \|_1 $$
+$$
+L_{grad} = \| \nabla(\mathbf{I}_{pred}) - \nabla(\mathbf{I}_{gt}) \|_1
+$$
 *   Latent Space가 아닌 **Pixel Space**에서 계산하여 인간의 시각적 인지(Perceptual Quality)와 더 유사한 결과 도출.
 
 ---
 
 ## 5. 추론
 
-### 단일 모델, 이중 제어 (Unified Control - Hard Inpainting Strategy)
 ControlNet 없이 단일 Transformer 모델이 형태와 질감을 모두 처리합니다.
 
 1.  **입력 데이터 준비**:
@@ -91,7 +94,9 @@ ControlNet 없이 단일 Transformer 모델이 형태와 질감을 모두 처리
 2.  **Clean Background Injection (Inference Loop)**:
     *   **학습과 동일한 조건**을 추론 시에도 유지해야 합니다.
     *   매 Denoising Step $t$마다:
-        $$ z_{t}^{input} = \mathbf{M}_{soft} \odot z_{t}^{noise} + (1-\mathbf{M}_{soft}) \odot z_{0}^{clean} $$
+    $$
+    z_{t}^{input} = \mathbf{M}_{soft} \odot z_{t}^{noise} + (1-\mathbf{M}_{soft}) \odot z_{0}^{clean}
+    $$
     *   즉, **배경 영역**은 노이즈가 없는 **깨끗한 원본 Latent($z_{0}^{clean}$)**를 강제로 주입하고, **마스크 영역**만 노이즈($z_{t}^{noise}$)를 제거해 나갑니다.
     *   이를 통해 배경은 완벽하게 원본을 유지하면서, 마스크 영역만 자연스럽게 생성됩니다.
 
