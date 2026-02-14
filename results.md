@@ -1,4 +1,6 @@
-# 추론 결과 비교
+### 학습 및 추론 방식 문서
+
+**[Sketch-Diffusion-Transformer Pipeline (pipeline2.md)](https://github.com/agliotomato/Sketch-Diffusion-Transformer/blob/main/pipeline2.md)** 
 
 ## 데이터 설명
 | 유형 | 설명 |
