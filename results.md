@@ -11,32 +11,31 @@
 ## 학습 샘플 (Training Samples Braid 1-8)
 | ID | 원본 이미지 | 매트 (Mask) | 스케치 | 생성 결과 |
 | :---: | :---: | :---: | :---: | :---: |
-| **Braid 1** | ![Orig](dataset/braid/img/train/braid_1.png) | ![Matte](dataset/braid/matte/train/braid_1.png) | ![Sketch](dataset/braid/sketch/train/braid_1.png) | ![Result](results/train/braid_1.png) |
-| **Braid 4** | ![Orig](dataset/braid/img/train/braid_4.png) | ![Matte](dataset/braid/matte/train/braid_4.png) | ![Sketch](dataset/braid/sketch/train/braid_4.png) | ![Result](results/train/braid_4.png) |
-| **Braid 5** | ![Orig](dataset/braid/img/train/braid_5.png) | ![Matte](dataset/braid/matte/train/braid_5.png) | ![Sketch](dataset/braid/sketch/train/braid_5.png) | ![Result](results/train/braid_5.png) |
-| **Braid 6** | ![Orig](dataset/braid/img/train/braid_6.png) | ![Matte](dataset/braid/matte/train/braid_6.png) | ![Sketch](dataset/braid/sketch/train/braid_6.png) | ![Result](results/train/braid_6.png) |
-| **Braid 7** | ![Orig](dataset/braid/img/train/braid_7.png) | ![Matte](dataset/braid/matte/train/braid_7.png) | ![Sketch](dataset/braid/sketch/train/braid_7.png) | ![Result](results/train/braid_7.png) |
-| **Braid 8** | ![Orig](dataset/braid/img/train/braid_8.png) | ![Matte](dataset/braid/matte/train/braid_8.png) | ![Sketch](dataset/braid/sketch/train/braid_8.png) | ![Result](results/train/braid_8.png) |
+| **Braid 1** | <img src="dataset/braid/img/train/braid_1.png" width="200" /> | <img src="dataset/braid/matte/train/braid_1.png" width="200" /> | <img src="dataset/braid/sketch/train/braid_1.png" width="200" /> | <img src="results/train/braid_1.png" width="200" /> |
+| **Braid 4** | <img src="dataset/braid/img/train/braid_4.png" width="200" /> | <img src="dataset/braid/matte/train/braid_4.png" width="200" /> | <img src="dataset/braid/sketch/train/braid_4.png" width="200" /> | <img src="results/train/braid_4.png" width="200" /> |
+| **Braid 5** | <img src="dataset/braid/img/train/braid_5.png" width="200" /> | <img src="dataset/braid/matte/train/braid_5.png" width="200" /> | <img src="dataset/braid/sketch/train/braid_5.png" width="200" /> | <img src="results/train/braid_5.png" width="200" /> |
+| **Braid 6** | <img src="dataset/braid/img/train/braid_6.png" width="200" /> | <img src="dataset/braid/matte/train/braid_6.png" width="200" /> | <img src="dataset/braid/sketch/train/braid_6.png" width="200" /> | <img src="results/train/braid_6.png" width="200" /> |
+| **Braid 7** | <img src="dataset/braid/img/train/braid_7.png" width="200" /> | <img src="dataset/braid/matte/train/braid_7.png" width="200" /> | <img src="dataset/braid/sketch/train/braid_7.png" width="200" /> | <img src="results/train/braid_7.png" width="200" /> |
+| **Braid 8** | <img src="dataset/braid/img/train/braid_8.png" width="200" /> | <img src="dataset/braid/matte/train/braid_8.png" width="200" /> | <img src="dataset/braid/sketch/train/braid_8.png" width="200" /> | <img src="results/train/braid_8.png" width="200" /> |
 
 ## 테스트 세트 결과 샘플 (Test Set Sample 10/107)
 | ID | 원본 이미지 | 매트 (Mask) | 스케치 | 생성 결과 |
 | :---: | :---: | :---: | :---: | :---: |
-| **Braid 2534** | ![Orig](dataset/braid/img/test/braid_2534.png) | ![Matte](dataset/braid/matte/test/braid_2534.png) | ![Sketch](dataset/braid/sketch/test/braid_2534.png) | ![Result](results/test/braid_2534.png) |
-| **Braid 2537** | ![Orig](dataset/braid/img/test/braid_2537.png) | ![Matte](dataset/braid/matte/test/braid_2537.png) | ![Sketch](dataset/braid/sketch/test/braid_2537.png) | ![Result](results/test/braid_2537.png) |
-| **Braid 2539** | ![Orig](dataset/braid/img/test/braid_2539.png) | ![Matte](dataset/braid/matte/test/braid_2539.png) | ![Sketch](dataset/braid/sketch/test/braid_2539.png) | ![Result](results/test/braid_2539.png) |
-| **Braid 2548** | ![Orig](dataset/braid/img/test/braid_2548.png) | ![Matte](dataset/braid/matte/test/braid_2548.png) | ![Sketch](dataset/braid/sketch/test/braid_2548.png) | ![Result](results/test/braid_2548.png) |
-| **Braid 2562** | ![Orig](dataset/braid/img/test/braid_2562.png) | ![Matte](dataset/braid/matte/test/braid_2562.png) | ![Sketch](dataset/braid/sketch/test/braid_2562.png) | ![Result](results/test/braid_2562.png) |
-| **Braid 2572** | ![Orig](dataset/braid/img/test/braid_2572.png) | ![Matte](dataset/braid/matte/test/braid_2572.png) | ![Sketch](dataset/braid/sketch/test/braid_2572.png) | ![Result](results/test/braid_2572.png) |
-| **Braid 2574** | ![Orig](dataset/braid/img/test/braid_2574.png) | ![Matte](dataset/braid/matte/test/braid_2574.png) | ![Sketch](dataset/braid/sketch/test/braid_2574.png) | ![Result](results/test/braid_2574.png) |
-| **Braid 2576** | ![Orig](dataset/braid/img/test/braid_2576.png) | ![Matte](dataset/braid/matte/test/braid_2576.png) | ![Sketch](dataset/braid/sketch/test/braid_2576.png) | ![Result](results/test/braid_2576.png) |
-| **Braid 2590** | ![Orig](dataset/braid/img/test/braid_2590.png) | ![Matte](dataset/braid/matte/test/braid_2590.png) | ![Sketch](dataset/braid/sketch/test/braid_2590.png) | ![Result](results/test/braid_2590.png) |
-| **Braid 2592** | ![Orig](dataset/braid/img/test/braid_2592.png) | ![Matte](dataset/braid/matte/test/braid_2592.png) | ![Sketch](dataset/braid/sketch/test/braid_2592.png) | ![Result](results/test/braid_2592.png) |
+| **Braid 2534** | <img src="dataset/braid/img/test/braid_2534.png" width="200" /> | <img src="dataset/braid/matte/test/braid_2534.png" width="200" /> | <img src="dataset/braid/sketch/test/braid_2534.png" width="200" /> | <img src="results/test/braid_2534.png" width="200" /> |
+| **Braid 2537** | <img src="dataset/braid/img/test/braid_2537.png" width="200" /> | <img src="dataset/braid/matte/test/braid_2537.png" width="200" /> | <img src="dataset/braid/sketch/test/braid_2537.png" width="200" /> | <img src="results/test/braid_2537.png" width="200" /> |
+| **Braid 2539** | <img src="dataset/braid/img/test/braid_2539.png" width="200" /> | <img src="dataset/braid/matte/test/braid_2539.png" width="200" /> | <img src="dataset/braid/sketch/test/braid_2539.png" width="200" /> | <img src="results/test/braid_2539.png" width="200" /> |
+| **Braid 2548** | <img src="dataset/braid/img/test/braid_2548.png" width="200" /> | <img src="dataset/braid/matte/test/braid_2548.png" width="200" /> | <img src="dataset/braid/sketch/test/braid_2548.png" width="200" /> | <img src="results/test/braid_2548.png" width="200" /> |
+| **Braid 2562** | <img src="dataset/braid/img/test/braid_2562.png" width="200" /> | <img src="dataset/braid/matte/test/braid_2562.png" width="200" /> | <img src="dataset/braid/sketch/test/braid_2562.png" width="200" /> | <img src="results/test/braid_2562.png" width="200" /> |
+| **Braid 2572** | <img src="dataset/braid/img/test/braid_2572.png" width="200" /> | <img src="dataset/braid/matte/test/braid_2572.png" width="200" /> | <img src="dataset/braid/sketch/test/braid_2572.png" width="200" /> | <img src="results/test/braid_2572.png" width="200" /> |
+| **Braid 2574** | <img src="dataset/braid/img/test/braid_2574.png" width="200" /> | <img src="dataset/braid/matte/test/braid_2574.png" width="200" /> | <img src="dataset/braid/sketch/test/braid_2574.png" width="200" /> | <img src="results/test/braid_2574.png" width="200" /> |
+| **Braid 2576** | <img src="dataset/braid/img/test/braid_2576.png" width="200" /> | <img src="dataset/braid/matte/test/braid_2576.png" width="200" /> | <img src="dataset/braid/sketch/test/braid_2576.png" width="200" /> | <img src="results/test/braid_2576.png" width="200" /> |
+| **Braid 2590** | <img src="dataset/braid/img/test/braid_2590.png" width="200" /> | <img src="dataset/braid/matte/test/braid_2590.png" width="200" /> | <img src="dataset/braid/sketch/test/braid_2590.png" width="200" /> | <img src="results/test/braid_2590.png" width="200" /> |
+| **Braid 2592** | <img src="dataset/braid/img/test/braid_2592.png" width="200" /> | <img src="dataset/braid/matte/test/braid_2592.png" width="200" /> | <img src="dataset/braid/sketch/test/braid_2592.png" width="200" /> | <img src="results/test/braid_2592.png" width="200" /> |
 
 ## 모델 비교 (Model Comparison: Orig vs GAN vs DiT)
 | 파일명 (File) | 원본 (Original) | 스케치 (Sketch) | GAN-based | DiT-based (Ours) |
 | :---: | :---: | :---: | :---: | :---: |
-| **braid_14.png** | ![Orig](compare/img/braid_14.png) | ![Sketch](compare/sketch/braid_14.png) | ![GAN](compare/gan-based/braid_14.png) | ![DiT](compare/dit-based/braid_14.png) |
-| **braid_30.png** | ![Orig](compare/img/braid_30.png) | ![Sketch](compare/sketch/braid_30.png) | ![GAN](compare/gan-based/braid_30.png) | ![DiT](compare/dit-based/braid_30.png) |
-| **braid_49.png** | ![Orig](compare/img/braid_49.png) | ![Sketch](compare/sketch/braid_49.png) | ![GAN](compare/gan-based/braid_49.png) | ![DiT](compare/dit-based/braid_49.png) |
-| **bun_3.png** | ![Orig](compare/img/bun_3.png) | ![Sketch](compare/sketch/bun_3.png) | ![GAN](compare/gan-based/bun_3.png) | ![DiT](compare/dit-based/bun_3.png) |
-
+| **braid_14.png** | <img src="compare/img/braid_14.png" width="200" /> | <img src="compare/sketch/braid_14.png" width="200" /> | <img src="compare/gan-based/braid_14.png" width="200" /> | <img src="compare/dit-based/braid_14.png" width="200" /> |
+| **braid_30.png** | <img src="compare/img/braid_30.png" width="200" /> | <img src="compare/sketch/braid_30.png" width="200" /> | <img src="compare/gan-based/braid_30.png" width="200" /> | <img src="compare/dit-based/braid_30.png" width="200" /> |
+| **braid_49.png** | <img src="compare/img/braid_49.png" width="200" /> | <img src="compare/sketch/braid_49.png" width="200" /> | <img src="compare/gan-based/braid_49.png" width="200" /> | <img src="compare/dit-based/braid_49.png" width="200" /> |
+| **bun_3.png** | <img src="compare/img/bun_3.png" width="200" /> | <img src="compare/sketch/bun_3.png" width="200" /> | <img src="compare/gan-based/bun_3.png" width="200" /> | <img src="compare/dit-based/bun_3.png" width="200" /> |
