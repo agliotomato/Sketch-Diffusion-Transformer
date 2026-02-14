@@ -259,11 +259,10 @@ def main():
             
             if mask is not None:
                 # Calculate loss in float32 to avoid overflow (Mask sum > 65504)
-                # 1024*1024 = 1ML approx, float16 max is 65k
                 loss_f32 = loss.float()
                 mask_f32 = mask.float()
                 loss = (loss_f32 * mask_f32).sum() / (mask_f32.sum() * loss.shape[1] + 1e-6)
-                loss = loss.to(pred.dtype) # Cast back to original dtype (float16 usually, or keep float32)
+                loss = loss.to(pred.dtype) 
             else:
                 loss = loss.mean()
             

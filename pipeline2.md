@@ -14,7 +14,7 @@ ControlNet을 사용하지 않고, SD3.5의 입력 레이어를 수정하여 스
 
 ---
 
-## 2. 입력 데이터 처리 상세 
+## 2. 입력 데이터 전처리
 데이터셋(`dataset_sd35.py`)에서 로드된 각 데이터는 다음과 같은 전처리 과정을 거쳐 모델에 입력됩니다.
 
 ### A. Target Image (원본 이미지)
@@ -80,16 +80,30 @@ $$ L_{grad} = \| \nabla(\mathbf{I}_{pred}) - \nabla(\mathbf{I}_{gt}) \|_1 $$
 
 ## 5. 추론
 
-### 단일 모델, 이중 제어
+### 단일 모델, 이중 제어 (Unified Control - Hard Inpainting Strategy)
 ControlNet 없이 단일 Transformer 모델이 형태와 질감을 모두 처리합니다.
 
-1.  **형태 제어**
-    *   스케치 이미지가 VAE를 거쳐 Latent 상태로 입력 채널에 직접 주입됩니다.
-    *   Transformer는 이를 힌트로 해석하여 스케치 형태에 맞춰 이미지를 생성합니다.
+1.  **입력 데이터 준비**:
+    *   **Original Image**: 전체 이미지 (배경 유지용)
+    *   **Matte (Mask)**: 수정할 헤어 영역
+    *   **Sketch**: 생성할 헤어의 가이드
 
-2.  **질감/색상 제어**
-    *   **LoRA**: 학습된 고해상도 머리카락 질감 생성.
-    *   **Text Prompt**: 색상이나 스타일 보조(옵션)
+2.  **Clean Background Injection (Inference Loop)**:
+    *   **학습과 동일한 조건**을 추론 시에도 유지해야 합니다.
+    *   매 Denoising Step $t$마다:
+        $$ z_{t}^{input} = \mathbf{M}_{soft} \odot z_{t}^{noise} + (1-\mathbf{M}_{soft}) \odot z_{0}^{clean} $$
+    *   즉, **배경 영역**은 노이즈가 없는 **깨끗한 원본 Latent($z_{0}^{clean}$)**를 강제로 주입하고, **마스크 영역**만 노이즈($z_{t}^{noise}$)를 제거해 나갑니다.
+    *   이를 통해 배경은 완벽하게 원본을 유지하면서, 마스크 영역만 자연스럽게 생성됩니다.
+
+3.  **Concatenation**:
+    *   최종 입력: $Concat([z_{t}^{input}, \text{Sketch Latent}], dim=1)$
 
 ---
+
+## 6. 기술적 세부 사항 (Technical Details)
+*   **Model**: StabilityAI Stable Diffusion 3.5 Medium
+*   **Optimizer**: 8-bit AdamW (Memory Efficient)
+
+## 7. 참고 문헌 (References)
+*   [ArXiv:2407.15886](https://arxiv.org/pdf/2407.15886)
 
