@@ -135,7 +135,7 @@ class SD3ReferenceAttnProcessor(nn.Module):
         if input_ndim == 4:
             hidden_states = hidden_states.transpose(-1, -2).reshape(batch_size, channel, height, width)
 
-        return hidden_states
+        return hidden_states, encoder_hidden_states
 
 def register_reference_attention(pipeline, controller):
     """
