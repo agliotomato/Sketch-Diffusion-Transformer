@@ -77,7 +77,8 @@ def main():
     if args.lora_path:
         print(f"Loading LoRA from {args.lora_path} with weight {args.lora_weight}...")
         try:
-            pipe.load_lora_weights(args.lora_path, adapter_name="hair_style")
+            # "hair_style"라는 이름으로 어댑터 로드 (PEFT 포맷 명시)
+            pipe.load_lora_weights(args.lora_path, weight_name="adapter_model.safetensors", adapter_name="hair_style")
             pipe.set_adapters(["hair_style"], adapter_weights=[args.lora_weight])
             print("Successfully loaded LoRA.")
         except Exception as e:
