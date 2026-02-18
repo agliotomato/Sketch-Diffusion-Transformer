@@ -12,6 +12,11 @@ from diffusers import (
 )
 from diffusers.utils import load_image
 from pipeline_sd3_5_ref import ReferenceAttentionControl, register_reference_attention
+try:
+    from s2m_wrapper import S2MModel
+except ImportError:
+    S2MModel = None
+
 
 # Helper to resize for SD3 (Nearest 64)
 def resize_for_sd3(image, base=64):
@@ -22,13 +27,14 @@ def resize_for_sd3(image, base=64):
 
 def main():
     parser = argparse.ArgumentParser(description="SD3.5 Sketch-to-Hair Inference with Ref-Attention")
-    parser.add_argument("--prompt", type=str, required=True, help="Text prompt")
+    parser.add_argument("--prompt", type=str, default="A detailed photo of a hairstyle", help="Text prompt (Default: 'A detailed photo of a hairstyle')")
     parser.add_argument("--sketch_path", type=str, required=True, help="Path to sketch input (input_1)")
     parser.add_argument("--image_path", type=str, required=True, help="Path to original image")
-    parser.add_argument("--mask_path", type=str, required=True, help="Path to mask image (matte)")
-    parser.add_argument("--color_ref_path", type=str, required=True, help="Path to color reference (input_2)")
+    parser.add_argument("--mask_path", type=str, default=None, help="Path to mask image (matte). If None, will be predicted from sketch using S2M")
+    parser.add_argument("--color_ref_path", type=str, default=None, help="Path to color reference (input_2). If None, uses original image.")
     parser.add_argument("--output_path", type=str, default="output_sd35_ref.png", help="Path to save result")
     parser.add_argument("--lora_path", type=str, default=None, help="Path to trained LoRA directory (e.g. sd35_hair_lora)")
+    parser.add_argument("--checkpoint_dir", type=str, default=None, help="Alias for --lora_path (for backward compatibility)")
     parser.add_argument("--lora_weight", type=float, default=1.0, help="LoRA weight scale")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--control_strength", type=float, default=0.7, help="ControlNet strength")
@@ -60,6 +66,10 @@ def main():
     
     pipe.to(device)
 
+    # Backward compatibility: Map checkpoint_dir to lora_path if needed
+    if args.checkpoint_dir and not args.lora_path:
+        args.lora_path = args.checkpoint_dir
+
     # --- LOAD LORA ---
     if args.lora_path:
         print(f"Loading LoRA from {args.lora_path} with weight {args.lora_weight}...")
@@ -78,8 +88,46 @@ def main():
     # --- LOAD INPUTS ---
     sketch = resize_for_sd3(load_image(args.sketch_path).convert("RGB"))
     image = resize_for_sd3(load_image(args.image_path).convert("RGB"))
-    mask = resize_for_sd3(load_image(args.mask_path).convert("RGB"))
-    ref_image = resize_for_sd3(load_image(args.color_ref_path).convert("RGB"))
+    
+    if args.mask_path:
+        print(f"Loading mask from {args.mask_path}...")
+        mask = resize_for_sd3(load_image(args.mask_path).convert("RGB"))
+    else:
+        print(">>> Mask path not provided. Attempting to generate matte using S2M model...")
+        if S2MModel is None:
+            raise ImportError("s2m_wrapper module not found. Cannot auto-generate matte.")
+        
+        # Path to S2M Checkpoint
+        s2m_ckpt = os.path.join("SketchHairSalon", "checkpoints", "S2M", "200_net_G.pth")
+        if not os.path.exists(s2m_ckpt):
+             # Try checking current directory or global checkpoints
+             s2m_ckpt = os.path.join("checkpoints", "S2M", "200_net_G.pth")
+        
+        s2m_predictor = S2MModel(s2m_ckpt)
+        
+        # S2M takes grayscale numpy array
+        sketch_cv = cv2.imread(args.sketch_path, 0) # Load as grayscale
+        if sketch_cv is None:
+             raise ValueError(f"Could not load sketch for S2M from {args.sketch_path}")
+
+        predicted_matte = s2m_predictor.predict_matte(sketch_cv)
+        
+        # Save predicted matte for debug/reference
+        matte_save_path = args.output_path.replace(".png", "_matte.png")
+        cv2.imwrite(matte_save_path, predicted_matte)
+        print(f"    Predicted matte saved to {matte_save_path}")
+        
+        # Convert to PIL and resize for SD3
+        mask = Image.fromarray(predicted_matte).convert("RGB")
+        mask = resize_for_sd3(mask)
+    
+
+
+    if args.color_ref_path:
+        ref_image = resize_for_sd3(load_image(args.color_ref_path).convert("RGB"))
+    else:
+        print(">>> No color_ref_path provided. Using original image as reference.")
+        ref_image = image
 
     generator = torch.Generator(device=device).manual_seed(args.seed)
 
