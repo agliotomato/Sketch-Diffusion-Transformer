@@ -15,7 +15,8 @@ from diffusers.utils import load_image
 from pipeline_sd3_5_ref import ReferenceAttentionControl, register_reference_attention
 try:
     from s2m_wrapper import S2MModel
-except ImportError:
+except ImportError as e:
+    print(f"Warning: Failed to import s2m_wrapper: {e}")
     S2MModel = None
 
 
