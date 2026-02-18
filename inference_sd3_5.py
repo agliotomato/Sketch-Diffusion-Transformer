@@ -38,6 +38,8 @@ def main():
     parser.add_argument("--lora_weight", type=float, default=1.0, help="LoRA weight scale")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--control_strength", type=float, default=0.7, help="ControlNet strength")
+    parser.add_argument("--num_inference_steps", type=int, default=28, help="Number of denoising steps")
+    parser.add_argument("--guidance_scale", type=float, default=7.0, help="Guidance scale")
     
     args = parser.parse_args()
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -173,8 +175,8 @@ def main():
         image=image,
         mask_image=mask,
         control_image=sketch,
-        num_inference_steps=28,
-        guidance_scale=7.0,
+        num_inference_steps=args.num_inference_steps,
+        guidance_scale=args.guidance_scale,
         controlnet_conditioning_scale=args.control_strength,
         generator=generator
     ).images[0]
