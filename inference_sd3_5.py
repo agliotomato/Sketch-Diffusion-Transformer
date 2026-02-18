@@ -149,7 +149,9 @@ def main():
         
         # Encode Prompt
         (prompt_embeds, negative_prompt_embeds, pooled_prompt_embeds, negative_pooled_prompt_embeds) = pipe.encode_prompt(
-            prompt=args.prompt, device=device, do_classifier_free_guidance=False
+            prompt=args.prompt,
+            prompt_2=args.prompt,
+            prompt_3=args.prompt, device=device, do_classifier_free_guidance=False
         )
 
         # Dummy Timestep (Low noise -> t=0 or t=100?)
