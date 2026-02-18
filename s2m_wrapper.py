@@ -2,7 +2,7 @@ import os
 import torch
 import numpy as np
 import cv2
-from SketchHairSalon.models.Unet_At_Bg import UnetAtGenerator
+from s2m_network.unet import UnetAtGenerator
 import torchvision.transforms.functional as tf
 
 class S2MModel:
