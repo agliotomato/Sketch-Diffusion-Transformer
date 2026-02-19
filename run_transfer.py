@@ -10,7 +10,7 @@ from torchvision import transforms
 from diffusers import SD3Transformer2DModel, AutoencoderKL, FlowMatchEulerDiscreteScheduler
 from peft import PeftModel
 
-def apply_affine_transform(image_pil, scale, x_offset, y_offset, target_size):
+def apply_affine_transform(image_pil, scale, x_offset, y_offset, target_size, interpolation=cv2.INTER_LINEAR):
     """
     Applies scaling and translation to an image, placing it on a canvas of target_size.
     image_pil: Source image (PIL)
@@ -31,7 +31,7 @@ def apply_affine_transform(image_pil, scale, x_offset, y_offset, target_size):
         # Handle too small scale
         return Image.new(image_pil.mode, target_size)
         
-    img_resized = cv2.resize(img, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
+    img_resized = cv2.resize(img, (new_w, new_h), interpolation=interpolation)
     
     # 2. Translate (Place on Canvas)
     # Canvas is target_size
@@ -135,8 +135,9 @@ def main():
     
     # 2. Apply Transform to Sketch & Matte
     print(f"Applying transform: Scale={args.scale}, X={args.x}, Y={args.y}")
-    sketch_transformed = apply_affine_transform(sketch_img, args.scale, args.x, args.y, target_size)
-    matte_transformed = apply_affine_transform(matte_img, args.scale, args.x, args.y, target_size)
+    # Use Nearest Neighbor for Sketch and Matte to preserve sharp lines/edges
+    sketch_transformed = apply_affine_transform(sketch_img, args.scale, args.x, args.y, target_size, interpolation=cv2.INTER_NEAREST)
+    matte_transformed = apply_affine_transform(matte_img, args.scale, args.x, args.y, target_size, interpolation=cv2.INTER_NEAREST)
     
     # 3. Check Mode
     if args.check:
