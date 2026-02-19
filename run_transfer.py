@@ -123,6 +123,7 @@ def main():
     parser.add_argument("--steps", type=int, default=30)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--guidance", type=float, default=7.0)
+    parser.add_argument("--debug", action="store_true", help="Save debug images (mask, inputs)") # Added debug flag
 
     args = parser.parse_args()
     
@@ -247,6 +248,13 @@ def main():
     blur = GaussianBlur(kernel_size=(61, 61), sigma=10.0)
     mask_latents_blurred = blur(mask_latents)
     
+    if args.debug:
+        # Save blurred mask check
+        save_mask = mask_latents_blurred[0, 0].cpu().float().numpy()
+        save_mask = (save_mask * 255).astype(np.uint8)
+        Image.fromarray(save_mask).save("debug_soft_mask.png")
+        print("Saved debug_soft_mask.png")
+    
     # Generation Loop
     scheduler.set_timesteps(args.steps)
     latents = torch.randn_like(latents_clean)
@@ -254,10 +262,21 @@ def main():
     print(f"Starting Inference with Guidance={args.guidance}...")
     
     for i, t in enumerate(scheduler.timesteps):
-        # Background Injection
+        # Background Injection (The User's specific question!)
         # (1 - M) * Clean + M * Noisy
         latents_input = (1.0 - mask_latents_blurred) * latents_clean + mask_latents_blurred * latents
         
+        if args.debug and i == 0:
+            # Visualize the first input to see "Matte Application"
+            # Decode latents_input
+            with torch.no_grad():
+                debug_latents = latents_input / vae.config.scaling_factor
+                debug_img = vae.decode(debug_latents, return_dict=False)[0]
+                debug_img = (debug_img / 2 + 0.5).clamp(0, 1)
+                debug_img = debug_img.cpu().permute(0, 2, 3, 1).float().numpy()
+                Image.fromarray((debug_img[0] * 255).astype(np.uint8)).save("debug_step0_input.png")
+                print("Saved debug_step0_input.png (clean bg + noisy hair hole)")
+
         # Prepare Batch for CFG
         # Batch: [Uncond (Null Sketch), Cond (Sketch)]
         latents_input_batch = torch.cat([latents_input, latents_input], dim=0)
@@ -284,6 +303,7 @@ def main():
         noise_pred = noise_pred_uncond + args.guidance * (noise_pred_cond - noise_pred_uncond)
             
         latents = scheduler.step(noise_pred, t, latents, return_dict=False)[0]
+
         
     # Final Decode
     latents_final = (1.0 - mask_latents_blurred) * latents_clean + mask_latents_blurred * latents
