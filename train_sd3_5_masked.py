@@ -276,7 +276,19 @@ def main():
     print(f"  - Loss Space: {args.loss_space}")
     loss_history = []
 
-    for epoch in range(args.num_epochs): # Use args.num_epochs
+    initial_epoch = 0
+    if args.resume_from_checkpoint:
+        # Try to parse epoch from checkpoint name (e.g., "checkpoint-10")
+        try:
+            # Assuming format "checkpoint-{epoch}"
+            ckpt_name = os.path.basename(args.resume_from_checkpoint)
+            if "checkpoint-" in ckpt_name:
+                initial_epoch = int(ckpt_name.split("-")[-1])
+                print(f"Resumed from epoch {initial_epoch}")
+        except ValueError:
+            print("Could not parse epoch from checkpoint name, starting from 0")
+
+    for epoch in range(initial_epoch, args.num_epochs): # Use args.num_epochs
         transformer.train()
         epoch_loss = 0
         for step, batch in enumerate(tqdm(dataloader, desc=f"Epoch {epoch}")):
