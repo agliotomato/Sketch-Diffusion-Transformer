@@ -133,10 +133,11 @@ def main():
     sketch_img = Image.open(args.sketch).convert("RGB")
     matte_img = Image.open(args.matte).convert("L")
     
-    # 2. Apply Transform to Sketch & Matte
+    # 3. Apply Transform to Sketch & Matte
     print(f"Applying transform: Scale={args.scale}, X={args.x}, Y={args.y}")
-    # Use Nearest Neighbor for Sketch and Matte to preserve sharp lines/edges
-    sketch_transformed = apply_affine_transform(sketch_img, args.scale, args.x, args.y, target_size, interpolation=cv2.INTER_NEAREST)
+    # Use Area/Linear for Sketch to preserve lines
+    sketch_transformed = apply_affine_transform(sketch_img, args.scale, args.x, args.y, target_size, interpolation=cv2.INTER_AREA)
+    # Use Nearest Neighbor for Matte to preserve sharp binary edges
     matte_transformed = apply_affine_transform(matte_img, args.scale, args.x, args.y, target_size, interpolation=cv2.INTER_NEAREST)
     
     # 3. Check Mode
@@ -227,8 +228,18 @@ def main():
         latents_clean = vae.encode(image_tensor).latent_dist.sample() * vae.config.scaling_factor
         sketch_latents = vae.encode(sketch_tensor).latent_dist.sample() * vae.config.scaling_factor
         
+        # Null Condition for CFG (Zero Sketch)
+        null_sketch_latents = torch.zeros_like(sketch_latents)
+        
     encoder_hidden_states = torch.zeros((1, 77, 4096), device=device, dtype=dtype)
     pooled_projections = torch.zeros((1, 2048), device=device, dtype=dtype)
+    
+    # For CFG, we need batch size 2 for encoder_hidden_states if we want to batch them?
+    # Or just run twice. Batching is usually faster.
+    # Let's batch [Uncond, Cond]
+    
+    encoder_hidden_states_batch = torch.cat([encoder_hidden_states, encoder_hidden_states], dim=0)
+    pooled_projections_batch = torch.cat([pooled_projections, pooled_projections], dim=0)
     
     # Soft Mask
     mask_latents = F.interpolate(mask_tensor, size=latents_clean.shape[-2:], mode="nearest")
@@ -240,22 +251,37 @@ def main():
     scheduler.set_timesteps(args.steps)
     latents = torch.randn_like(latents_clean)
     
-    print("Starting Inference...")
+    print(f"Starting Inference with Guidance={args.guidance}...")
+    
     for i, t in enumerate(scheduler.timesteps):
-        # Background Injection (The User's specific question!)
+        # Background Injection
         # (1 - M) * Clean + M * Noisy
         latents_input = (1.0 - mask_latents_blurred) * latents_clean + mask_latents_blurred * latents
         
-        model_input = torch.cat([latents_input, sketch_latents], dim=1)
+        # Prepare Batch for CFG
+        # Batch: [Uncond (Null Sketch), Cond (Sketch)]
+        latents_input_batch = torch.cat([latents_input, latents_input], dim=0)
+        sketch_latents_batch = torch.cat([null_sketch_latents, sketch_latents], dim=0)
+        
+        model_input = torch.cat([latents_input_batch, sketch_latents_batch], dim=1)
+        
+        # Timestep
+        t_batch = torch.cat([t.unsqueeze(0), t.unsqueeze(0)], dim=0).to(device)
         
         with torch.no_grad():
-            noise_pred = transformer(
+            noise_pred_batch = transformer(
                 hidden_states=model_input,
-                timestep=t.unsqueeze(0).to(device),
-                encoder_hidden_states=encoder_hidden_states,
-                pooled_projections=pooled_projections,
+                timestep=t_batch,
+                encoder_hidden_states=encoder_hidden_states_batch,
+                pooled_projections=pooled_projections_batch,
                 return_dict=False
             )[0]
+            
+        # Split predictions
+        noise_pred_uncond, noise_pred_cond = noise_pred_batch.chunk(2)
+        
+        # Apply CFG
+        noise_pred = noise_pred_uncond + args.guidance * (noise_pred_cond - noise_pred_uncond)
             
         latents = scheduler.step(noise_pred, t, latents, return_dict=False)[0]
         
