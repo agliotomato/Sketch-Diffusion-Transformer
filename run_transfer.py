@@ -207,21 +207,6 @@ def main():
     # But usually we want to keep target resolution or crop?
     # SD3.5 is trained on 1024. Let's resize inputs to 1024.
     
-    # ENHANCE SKETCH: Force high contrast
-    # Convert to grayscale numpy
-    sketch_np = np.array(sketch_transformed.convert("L"))
-    # Invert if needed (we want lines to be dark, BG light for standard)
-    # Assuming standard sketch (white BG, black lines)
-    if np.mean(sketch_np) < 127: # If dark BG
-        # Invert to make it White BG for processing (if model expects white BG)
-        # BUT WAIT, dataset processing just loads RGB. 
-        # Let's just maximize contrast.
-        pass
-        
-    # Binarize: Make dark pixels (lines) pure black (0), light pixels pure white (255)
-    # Threshold: < 200 becomes 0, else 255
-    _, sketch_bin = cv2.threshold(sketch_np, 200, 255, cv2.THRESH_BINARY)
-    sketch_transformed = Image.fromarray(sketch_bin).convert("RGB")
     
     process_transform = transforms.Compose([
         transforms.Resize((1024, 1024)),
