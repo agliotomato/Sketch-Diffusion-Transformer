@@ -123,7 +123,8 @@ def main():
     parser.add_argument("--steps", type=int, default=30)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--guidance", type=float, default=7.0)
-    parser.add_argument("--debug", action="store_true", help="Save debug images (mask, inputs)") # Added debug flag
+    parser.add_argument("--bg_start_ratio", type=float, default=0.5, help="At what stage to start injecting background (0.0 to 1.0)")
+    parser.add_argument("--debug", action="store_true", help="Save debug images (mask, inputs)")
 
     args = parser.parse_args()
     
@@ -262,9 +263,15 @@ def main():
     print(f"Starting Inference with Guidance={args.guidance}...")
     
     for i, t in enumerate(scheduler.timesteps):
-        # Background Injection (The User's specific question!)
-        # (1 - M) * Clean + M * Noisy
-        latents_input = (1.0 - mask_latents_blurred) * latents_clean + mask_latents_blurred * latents
+        # Background Injection Scheduling
+        step_ratio = i / len(scheduler.timesteps)
+        
+        if step_ratio < args.bg_start_ratio:
+            # Block background injection to let the sketch define the structure
+            latents_input = latents
+        else:
+            # (1 - M) * Clean + M * Noisy
+            latents_input = (1.0 - mask_latents_blurred) * latents_clean + mask_latents_blurred * latents
         
         if args.debug and i == 0:
             # Visualize the first input to see "Matte Application"
