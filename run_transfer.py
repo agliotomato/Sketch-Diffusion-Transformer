@@ -159,14 +159,16 @@ def main():
         # Make red where mask is white
         overlay[mask_bool] = overlay[mask_bool] * 0.5 + np.array([255, 0, 0]) * 0.5
         
-        # Adaptive Sketch Detection
+        # Adaptive Sketch Detection - capturing all colored lines
         sketch_gray = cv2.cvtColor(sketch_np, cv2.COLOR_RGB2GRAY)
         if np.mean(sketch_gray) < 127:
-            # Black Background, White Lines
-            edge_bool = sketch_gray > 100
+            # Black Background, White/Colored Lines
+            # Lower threshold to 10 to catch dark colors (Blue/Red)
+            edge_bool = sketch_gray > 10
         else:
-            # White Background, Black Lines
-            edge_bool = sketch_gray < 200
+            # White Background, Black/Colored Lines
+            # Higher threshold to 240 to catch light colors
+            edge_bool = sketch_gray < 240
         
         overlay[edge_bool] = np.array([0, 255, 0]) # Green lines
         
