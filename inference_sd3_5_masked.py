@@ -40,6 +40,7 @@ def main():
     parser.add_argument("--output_path", type=str, default="output.png")
     parser.add_argument("--num_inference_steps", type=int, default=30)
     parser.add_argument("--guidance_scale", type=float, default=7.0)
+    parser.add_argument("--bg_start_ratio", type=float, default=0.5, help="At what stage to start injecting background (0.0 to 1.0). Default 0.5 (Halfway)")
     parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
 
@@ -140,10 +141,20 @@ def main():
     blur = GaussianBlur(kernel_size=(61, 61), sigma=10.0)
     mask_latents_blurred = blur(mask_latents)
 
-    print(f"Starting Inference (Guidance Scale: {args.guidance_scale})...")
+    print(f"Starting Inference (Guidance Scale: {args.guidance_scale}, BG Start Ratio: {args.bg_start_ratio})...")
     for i, t in enumerate(scheduler.timesteps):
-        # 1. Clean Background Injection
-        latents_input = (1.0 - mask_latents_blurred) * latents_clean + mask_latents_blurred * latents
+        # Current Step Ratio (0.0 at first step, 1.0 at last)
+        step_ratio = i / len(scheduler.timesteps)
+        
+        # 1. Clean Background Injection logic with Scheduling
+        # If we haven't reached the bg_start_ratio, we keep background as NOISY (current latents)
+        # to prevent identity prior from overriding the sketch too early.
+        if step_ratio < args.bg_start_ratio:
+            # Mask out the background injection - let the model see the noisy background
+            latents_input = latents
+        else:
+            # Normal Background Injection for blending
+            latents_input = (1.0 - mask_latents_blurred) * latents_clean + mask_latents_blurred * latents
         
         # 2. CFG: Prepare Conditional and Unconditional Inputs
         # If guidance_scale > 1, we do CFG on the sketch condition

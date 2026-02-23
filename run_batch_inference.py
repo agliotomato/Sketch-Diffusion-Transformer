@@ -16,6 +16,7 @@ def main():
     parser.add_argument("--y", type=int, default=0)
     parser.add_argument("--steps", type=int, default=30)
     parser.add_argument("--guidance", type=float, default=7.0)
+    parser.add_argument("--bg_start_ratio", type=float, default=0.5)
     parser.add_argument("--seed", type=int, default=42)
 
     args = parser.parse_args()
@@ -53,6 +54,7 @@ def main():
             "--output_path", output_path,
             "--num_inference_steps", str(args.steps),
             "--guidance_scale", str(args.guidance),
+            "--bg_start_ratio", str(args.bg_start_ratio),
             "--seed", str(args.seed)
         ]
         
