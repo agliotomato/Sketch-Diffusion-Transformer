@@ -9,6 +9,39 @@ from peft import PeftModel, LoraConfig
 from torchvision import transforms
 from PIL import Image
 import numpy as np
+import cv2
+
+def apply_affine_transform(image_pil, scale, x_offset, y_offset, target_size, interpolation=cv2.INTER_LINEAR):
+    img = np.array(image_pil)
+    h, w = img.shape[:2]
+    new_w = int(w * scale)
+    new_h = int(h * scale)
+    if new_w <= 0 or new_h <= 0:
+        return Image.new(image_pil.mode, target_size)
+    img_resized = cv2.resize(img, (new_w, new_h), interpolation=interpolation)
+    canvas_w, canvas_h = target_size
+    if len(img.shape) == 3: # RGB
+        canvas = np.zeros((canvas_h, canvas_w, 3), dtype=np.uint8)
+    else: # Grayscale/L
+        canvas = np.zeros((canvas_h, canvas_w), dtype=np.uint8)
+    start_x, start_y = int(x_offset), int(y_offset)
+    src_x1, src_y1, src_x2, src_y2 = 0, 0, new_w, new_h
+    dst_x1, dst_y1, dst_x2, dst_y2 = start_x, start_y, start_x + new_w, start_y + new_h
+    if dst_x1 < 0:
+        src_x1 -= dst_x1
+        dst_x1 = 0
+    if dst_y1 < 0:
+        src_y1 -= dst_y1
+        dst_y1 = 0
+    if dst_x2 > canvas_w:
+        src_x2 -= (dst_x2 - canvas_w)
+        dst_x2 = canvas_w
+    if dst_y2 > canvas_h:
+        src_y2 -= (dst_y2 - canvas_h)
+        dst_y2 = canvas_h
+    if src_x2 > src_x1 and src_y2 > src_y1:
+        canvas[dst_y1:dst_y2, dst_x1:dst_x2] = img_resized[src_y1:src_y2, src_x1:src_x2]
+    return Image.fromarray(canvas)
 
 # Modify pos_embed to 32 channels (Same as Training)
 def modify_pos_embed(transformer):
@@ -40,7 +73,10 @@ def main():
     parser.add_argument("--output_path", type=str, default="output.png")
     parser.add_argument("--num_inference_steps", type=int, default=30)
     parser.add_argument("--guidance_scale", type=float, default=7.0)
-    parser.add_argument("--bg_start_ratio", type=float, default=0.5, help="At what stage to start injecting background (0.0 to 1.0). Default 0.5 (Halfway)")
+    parser.add_argument("--bg_start_ratio", type=float, default=0.5)
+    parser.add_argument("--scale", type=float, default=1.0)
+    parser.add_argument("--x", type=int, default=0)
+    parser.add_argument("--y", type=int, default=0)
     parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
 
@@ -95,8 +131,15 @@ def main():
     ])
 
     image = Image.open(args.image_path).convert("RGB")
-    mask = Image.open(args.mask_path).convert("L")
-    sketch = Image.open(args.sketch_path).convert("RGB")
+    target_size = image.size
+    
+    # Load and Transform Sketch/Matte
+    raw_mask = Image.open(args.mask_path).convert("L")
+    raw_sketch = Image.open(args.sketch_path).convert("RGB")
+    
+    print(f"Applying transforms: scale={args.scale}, x={args.x}, y={args.y}")
+    mask = apply_affine_transform(raw_mask, args.scale, args.x, args.y, target_size, interpolation=cv2.INTER_NEAREST)
+    sketch = apply_affine_transform(raw_sketch, args.scale, args.x, args.y, target_size, interpolation=cv2.INTER_LINEAR)
 
     pixel_values = transform(image).unsqueeze(0).to(device, dtype=dtype)
     mask_tensor = mask_transform(mask).unsqueeze(0).to(device, dtype=dtype)

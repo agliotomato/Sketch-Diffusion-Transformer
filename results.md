@@ -57,3 +57,15 @@
 
 > **Note**: 학습을 더 진행하면 loss가 더 안정화 될까? overfitting이 발생할 수도 있을 것 같다.
 
+
+
+python inference_sd3_5_masked.py \
+>   --checkpoint_dir "checkpoints/stage2_braid/stage2_checkpoint-10" \
+>   --image_path "dataset/braid/img/test/wavy_766.png" \
+>   --mask_path "dataset/braid/matte/test/braid_2534.png" \
+>   --sketch_path "dataset/braid/sketch/test/braid_2534.png" \
+>   --output_path "results/0219/wavy_766_braid_2534_real.png" \
+>   --num_inference_steps 30
+
+
+python run_transfer.py   --target dataset/braid/img/test/wavy_766.png   --sketch dataset/braid/sketch/test/braid_2534.png   --matte dataset/braid/matte/test/braid_2534.png   --checkpoint checkpoints/stage2_braid/stage2_checkpoint-10   --output results/0219/wavy_766_braid_2534_strong.png   --x 0 --y 0 --scale 1.0   --steps 50   --guidance 9.0

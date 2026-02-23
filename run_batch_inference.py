@@ -17,6 +17,7 @@ def main():
     parser.add_argument("--steps", type=int, default=30)
     parser.add_argument("--guidance", type=float, default=7.0)
     parser.add_argument("--bg_start_ratio", type=float, default=0.5)
+    parser.add_argument("--checkpoints", type=str, nargs="+", help="Optional: List of specific checkpoints to test (e.g., stage2_checkpoint-30)")
     parser.add_argument("--seed", type=int, default=42)
 
     args = parser.parse_args()
@@ -24,14 +25,17 @@ def main():
     os.makedirs(args.output_dir, exist_ok=True)
     
     # Checkpoints to test
-    checkpoints = [
-        "stage2_checkpoint-5",
-        "stage2_checkpoint-10",
-        "stage2_checkpoint-15",
-        "stage2_checkpoint-20",
-        "stage2_checkpoint-25",
-        "stage2_checkpoint-30"
-    ]
+    if args.checkpoints:
+        checkpoints = args.checkpoints
+    else:
+        checkpoints = [
+            "stage2_checkpoint-5",
+            "stage2_checkpoint-10",
+            "stage2_checkpoint-15",
+            "stage2_checkpoint-20",
+            "stage2_checkpoint-25",
+            "stage2_checkpoint-30"
+        ]
     
     for ckpt_name in checkpoints:
         ckpt_path = os.path.join(args.checkpoint_dir, ckpt_name)
@@ -55,6 +59,9 @@ def main():
             "--num_inference_steps", str(args.steps),
             "--guidance_scale", str(args.guidance),
             "--bg_start_ratio", str(args.bg_start_ratio),
+            "--x", str(args.x),
+            "--y", str(args.y),
+            "--scale", str(args.scale),
             "--seed", str(args.seed)
         ]
         
