@@ -140,45 +140,48 @@ def main():
     blur = GaussianBlur(kernel_size=(61, 61), sigma=10.0)
     mask_latents_blurred = blur(mask_latents)
 
-    print("Starting Inference...")
+    print(f"Starting Inference (Guidance Scale: {args.guidance_scale})...")
     for i, t in enumerate(scheduler.timesteps):
-        # 1. Clean Background Injection logic from Training
-        # In Training:
-        # noisy_latents = (1-M)*clean + M*noisy
-        # Here 'latents' variable holds the current "noisy" state of the generation.
-        # We enforce background to be "clean original" at the noise level of current step?
-        # NO. Training logic:
-        # background (1-mask) stays clean (latents_clean) always.
-        # foreground (mask) is noisy.
-        # So we should construct the input 'latents_input' by mixing.
-        
-        # Wait, if we replace BG with clean latents every step, the BG never changes.
-        # But 'latents' (the loop variable) is evolving from noise to clean.
-        # If we only update the FG of 'latents', and keep BG as 'latents_clean',
-        # then the model sees perfect BG and evolving FG.
-        # This matches training.
-        
-        # However, we need to respect the noise scheduler.
-        # If we are at step t (high noise), and we inject perfectly clean BG (z0),
-        # the model might find it weird if it expects z_t.
-        # BUT, we trained it exactly like this! 
-        # (1.0 - mask) * latents (which was clean z0) + mask * noisy_latents.
-        # So YES, we should inject z0 (clean latents) into BG.
-        
+        # 1. Clean Background Injection
         latents_input = (1.0 - mask_latents_blurred) * latents_clean + mask_latents_blurred * latents
         
-        # 2. Sketch Concatenation
-        model_input = torch.cat([latents_input, sketch_latents], dim=1)
+        # 2. CFG: Prepare Conditional and Unconditional Inputs
+        # If guidance_scale > 1, we do CFG on the sketch condition
+        do_classifier_free_guidance = args.guidance_scale > 1.0
         
+        if do_classifier_free_guidance:
+            # Conditional: with sketch
+            cond_latents = torch.cat([latents_input, sketch_latents], dim=1)
+            # Unconditional: without sketch (zeroed)
+            uncond_latents = torch.cat([latents_input, torch.zeros_like(sketch_latents)], dim=1)
+            
+            model_input = torch.cat([uncond_latents, cond_latents], dim=0)
+            
+            # Batch other conditions
+            batch_encoder_hidden_states = torch.cat([encoder_hidden_states, encoder_hidden_states], dim=0)
+            batch_pooled_projections = torch.cat([pooled_projections, pooled_projections], dim=0)
+            batch_t = torch.cat([t.unsqueeze(0), t.unsqueeze(0)], dim=0).to(device)
+        else:
+            model_input = torch.cat([latents_input, sketch_latents], dim=1)
+            batch_encoder_hidden_states = encoder_hidden_states
+            batch_pooled_projections = pooled_projections
+            batch_t = t.unsqueeze(0).to(device)
+
         # 3. Predict
         with torch.no_grad():
-            noise_pred = transformer(
+            output = transformer(
                 hidden_states=model_input,
-                timestep=t.unsqueeze(0).to(device),
-                encoder_hidden_states=encoder_hidden_states,
-                pooled_projections=pooled_projections,
+                timestep=batch_t,
+                encoder_hidden_states=batch_encoder_hidden_states,
+                pooled_projections=batch_pooled_projections,
                 return_dict=False
             )[0]
+            
+            if do_classifier_free_guidance:
+                noise_pred_uncond, noise_pred_text = output.chunk(2)
+                noise_pred = noise_pred_uncond + args.guidance_scale * (noise_pred_text - noise_pred_uncond)
+            else:
+                noise_pred = output
 
         # 4. Step
         # Scheduler Step usually expects 'latents' (current noisy state).
