@@ -45,17 +45,14 @@ def main():
         output_path = os.path.join(args.output_dir, output_filename)
         
         cmd = [
-            "python", "run_transfer.py",
-            "--checkpoint", ckpt_path,
-            "--target", args.target,
-            "--sketch", args.sketch,
-            "--matte", args.matte,
-            "--output", output_path,
-            "--scale", str(args.scale),
-            "--x", str(args.x),
-            "--y", str(args.y),
-            "--steps", str(args.steps),
-            "--guidance", str(args.guidance),
+            "python", "inference_sd3_5_masked.py",
+            "--checkpoint_dir", ckpt_path,
+            "--image_path", args.target,
+            "--mask_path", args.matte,
+            "--sketch_path", args.sketch,
+            "--output_path", output_path,
+            "--num_inference_steps", str(args.steps),
+            "--guidance_scale", str(args.guidance),
             "--seed", str(args.seed)
         ]
         
