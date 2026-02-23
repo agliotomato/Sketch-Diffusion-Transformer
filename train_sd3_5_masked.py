@@ -80,9 +80,9 @@ def main():
 
     # Log Stage
     if args.lambda_shape > 0:
-        print(f"Running Specialization Stage: Lambda Shape {args.lambda_shape} in {args.loss_space} Space")
+        print(f"Running Joint Training Stage: Lambda Shape {args.lambda_shape} in {args.loss_space} Space")
     else:
-        print("Running Generalization Stage: lambda_shape = 0")
+        print("Running Joint Training Stage without Gradient Loss (Not recommended for braid details)")
 
     accelerator = Accelerator(mixed_precision="fp16", gradient_accumulation_steps=args.gradient_accumulation_steps)
     device = accelerator.device
@@ -415,8 +415,8 @@ def main():
 
         # Save Checkpoint
         if (epoch + 1) % 5 == 0:
-            stage_name = 'stage2' if args.lambda_shape > 0 else 'stage1'
-            output_path = os.path.join(args.output_dir, f"{stage_name}_checkpoint-{epoch+1}") # Added stage_name
+            stage_name = 'joint'
+            output_path = os.path.join(args.output_dir, f"{stage_name}_checkpoint-{epoch+1}")
             os.makedirs(output_path, exist_ok=True)
             
             # Save Transformer (LoRA Adapters)
