@@ -260,7 +260,8 @@ def main():
     
     # Generation Loop
     scheduler.set_timesteps(args.steps)
-    latents = torch.randn_like(latents_clean)
+    initial_noise = torch.randn_like(latents_clean)
+    latents = initial_noise.clone()
     
     print(f"Starting Inference with Guidance={args.guidance}...")
     
@@ -268,12 +269,16 @@ def main():
         # Background Injection Scheduling
         step_ratio = i / len(scheduler.timesteps)
         
+        # Calculate matching noise level (sigma) for the current step
+        sigma = t.float() / scheduler.config.num_train_timesteps
+        noisy_bg = (1.0 - sigma) * latents_clean + sigma * initial_noise
+        
         if step_ratio < args.bg_start_ratio:
             # Block background injection to let the sketch define the structure
             latents_input = latents
         else:
-            # (1 - M) * Clean + M * Noisy
-            latents_input = (1.0 - mask_latents_blurred) * latents_clean + mask_latents_blurred * latents
+            # Replace latents_clean with noisy_bg
+            latents_input = (1.0 - mask_latents_blurred) * noisy_bg + mask_latents_blurred * latents
         
         if args.debug and i == 0:
             # Visualize the first input to see "Matte Application"

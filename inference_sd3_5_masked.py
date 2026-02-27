@@ -172,9 +172,10 @@ def main():
     pooled_projections = torch.zeros((1, 2048), device=device, dtype=dtype)
 
     # 7. Generation Loop (Clean Background Injection)
-    # Initial Noise
+    # Initial Noise (Need to keep original noise for Flow Matching scheduling)
     torch.manual_seed(args.seed)
-    latents = torch.randn_like(latents_clean)
+    initial_noise = torch.randn_like(latents_clean)
+    latents = initial_noise.clone()
     
     scheduler.set_timesteps(args.num_inference_steps)
     
@@ -189,15 +190,21 @@ def main():
         # Current Step Ratio (0.0 at first step, 1.0 at last)
         step_ratio = i / len(scheduler.timesteps)
         
-        # 1. Clean Background Injection logic with Scheduling
-        # If we haven't reached the bg_start_ratio, we keep background as NOISY (current latents)
-        # to prevent identity prior from overriding the sketch too early.
+        # 1. Background Injection logic with Noisy Scheduling
+        # SD3.5 uses FlowMatchEulerDiscreteScheduler
+        # Clean Background injection must match the current noise level (sigma)
+        sigma = t.float() / scheduler.config.num_train_timesteps
+        
+        # Flow matching forward process: x_t = (1 - sigma) * x_0 + sigma * x_1 (where x_1 is noise)
+        noisy_bg = (1.0 - sigma) * latents_clean + sigma * initial_noise
+
         if step_ratio < args.bg_start_ratio:
             # Mask out the background injection - let the model see the noisy background
             latents_input = latents
         else:
-            # Normal Background Injection for blending
-            latents_input = (1.0 - mask_latents_blurred) * latents_clean + mask_latents_blurred * latents
+            # Continuous Background Injection for blending
+            # Replace latents_clean with noisy_bg to prevent sampling trajectory collapse
+            latents_input = (1.0 - mask_latents_blurred) * noisy_bg + mask_latents_blurred * latents
         
         # 2. CFG: Prepare Conditional and Unconditional Inputs
         # If guidance_scale > 1, we do CFG on the sketch condition
