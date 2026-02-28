@@ -59,13 +59,13 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--data_root", type=str, required=True)
     parser.add_argument("--output_dir", type=str, default="sd35_sketch_hair_lora")
-    parser.add_argument("--batch_size", type=int, default=1)
+    parser.add_argument("--batch_size", type=int, default=4)
     parser.add_argument("--num_epochs", type=int, default=10)
     parser.add_argument("--learning_rate", type=float, default=1e-4)
     parser.add_argument("--gradient_accumulation_steps", type=int, default=4)
     parser.add_argument("--model_name", type=str, default="stabilityai/stable-diffusion-3.5-medium")
-    parser.add_argument("--category", type=str, default=None, 
-                       help="Dataset category to use (e.g., 'braid', 'unbraid'). Default: None (Load both if available)")
+    parser.add_argument("--category", type=str, required=True, choices=["unbraid", "braid"],
+                       help="Dataset category to use ('unbraid' for Stage 1, 'braid' for Stage 2).")
     parser.add_argument("--lambda_shape", type=float, default=0.0, 
                        help="Weight for Shape Reconstruction Loss (Gradient Loss).")
     parser.add_argument("--loss_space", type=str, default="latent", choices=["latent", "pixel"],
@@ -178,89 +178,62 @@ def main():
     )
     vae.to(device, dtype=torch.float16)
 
-    class GradientLoss(torch.nn.Module):
+    class ShapeLoss(torch.nn.Module):
         def __init__(self, mode="latent", vae=None):
             super().__init__()
             self.mode = mode
             self.vae = vae
             
-            # Sobel kernel
-            kernel_x = torch.tensor([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]], dtype=torch.float32).unsqueeze(0).unsqueeze(0)
-            kernel_y = torch.tensor([[-1, -2, -1], [0, 0, 0], [1, 2, 1]], dtype=torch.float32).unsqueeze(0).unsqueeze(0)
-            self.register_buffer("kernel_x", kernel_x)
-            self.register_buffer("kernel_y", kernel_y)
-            
-            # Gaussian Kernel for mask blurring (Sigma 10 approx)
-            # Create a large kernel size to support sigma 10 (size ~ 6*sigma)
             from torchvision.transforms import GaussianBlur
-            self.blur = GaussianBlur(kernel_size=(61, 61), sigma=10.0)
+            # 1. Mask Blurring for Background Blending (from existing code, large kernel)
+            self.mask_blur = GaussianBlur(kernel_size=(61, 61), sigma=10.0)
+            
+            # 2. Shape Blurring for L1 Shape Reconstruction (Paper: Sigma 10, Kernel 11 to spread)
+            self.shape_blur = GaussianBlur(kernel_size=(11, 11), sigma=10.0)
 
-        def get_gradients(self, img):
-            b, c, h, w = img.shape
-            img_reshaped = img.view(b * c, 1, h, w)
-            
-            grad_x = torch.nn.functional.conv2d(img_reshaped, self.kernel_x, padding=1)
-            grad_y = torch.nn.functional.conv2d(img_reshaped, self.kernel_y, padding=1)
-            
-            grad = torch.sqrt(grad_x**2 + grad_y**2 + 1e-6)
-            return grad.view(b, c, h, w)
+        def get_blurred_shape(self, img):
+            return self.shape_blur(img.float())
 
         def forward(self, pred, target, mask=None, z_t=None, sigmas=None):
             # Input Handling
             if self.mode == "pixel":
                 # Reconstruct z0: x_pred = z_t - sigma * v_pred
-                # pred is v_pred
                 z0_pred = z_t - sigmas * pred
-                # Target z0 is implicitly 'target' which was passed as 'latents' (original) in this branch?
-                # Wait, caller passes 'target' as 'noise - latents' (velocity) usually.
-                # If we want Pixel Loss, we need the GT Image or GT Latent.
-                # Let's adjust call signature in training loop or reconstruct here.
-                
-                # We need to decode z0_pred.
-                # VAE Decode requires float32 sometimes or good precision.
-                # Provide VAE in eval mode.
                 
                 # Decode Prediction
                 z0_pred_scaled = z0_pred / self.vae.config.scaling_factor
-                # Ensure dtype matches VAE (float16) explicitly
                 z0_pred_scaled = z0_pred_scaled.to(torch.float16)
                 pixel_pred = self.vae.decode(z0_pred_scaled, return_dict=False)[0]
                 
-                # Decode Target (We assume target passed here is the GT Latent for Pixel Mode flexibility, 
-                # OR we reconstruct GT from inputs. 
-                # Actually, easier to pass GT Latents as 'target' if mode is pixel from the loop.
-                # Let's handle 'target' argument polymorphism in the loop.)
+                # Decode Target
                 target_scaled = target / self.vae.config.scaling_factor
-                # Ensure dtype matches VAE (float16) explicitly
                 target_scaled = target_scaled.to(torch.float16)
                 pixel_gt = self.vae.decode(target_scaled, return_dict=False)[0]
                 
-                # Calculate Gradients in Pixel Space
-                grad_pred = self.get_gradients(pixel_pred.float()) # Compute grad in float32 for stability
-                grad_gt = self.get_gradients(pixel_gt.float())
+                # Apply Gaussian Blur (Shape Volume Extraction)
+                shape_pred = self.get_blurred_shape(pixel_pred)
+                shape_gt = self.get_blurred_shape(pixel_gt)
                 
                 # Resize Mask to Pixel Space
                 if mask is not None:
                     mask = F.interpolate(mask, size=pixel_pred.shape[-2:], mode="nearest")
-                    # Apply Gaussian Blur to Mask here if not already done?
-                    # User requested Soft Masking. We can do it here or earlier.
-                    # Let's apply it here to ensure it affects the loss weights.
-                    mask = self.blur(mask)
             
             else: # Latent Space
-                grad_pred = self.get_gradients(pred)
-                grad_gt = self.get_gradients(target)
+                # Apply Gaussian Blur (Shape Volume Extraction)
+                shape_pred = self.get_blurred_shape(pred)
+                shape_gt = self.get_blurred_shape(target)
                 
                 if mask is not None:
                     mask = F.interpolate(mask, size=pred.shape[-2:], mode="nearest")
-                    mask = self.blur(mask)
 
-            loss = torch.abs(grad_pred - grad_gt)
+            # L1 Shape Loss on Blurred Volumes
+            loss = torch.abs(shape_pred - shape_gt)
             
             if mask is not None:
-                # Calculate loss in float32 to avoid overflow (Mask sum > 65504)
+                # Calculate loss in float32 to avoid overflow
                 loss_f32 = loss.float()
                 mask_f32 = mask.float()
+                # Multiply mask BEFORE sum, so blur differences outside hair are ignored!
                 loss = (loss_f32 * mask_f32).sum() / (mask_f32.sum() * loss.shape[1] + 1e-6)
                 loss = loss.to(pred.dtype) 
             else:
@@ -268,7 +241,7 @@ def main():
             
             return loss
 
-    gradient_criterion = GradientLoss(mode=args.loss_space, vae=vae).to(accelerator.device) # Pass vae and mode
+    gradient_criterion = ShapeLoss(mode=args.loss_space, vae=vae).to(accelerator.device) # Pass vae and mode
 
     print(f"Start Training: {len(dataset)} images, {args.num_epochs} epochs") # Use args.num_epochs
     print(f"  - Category: {args.category if args.category else 'All'}")
@@ -321,12 +294,12 @@ def main():
                 # This prevents hard edge artifacts and allows seamless blending
                 
                 # 1. Prepare Soft Mask for Noise Injection
-                # Resize mask to latent size [128, 128]
+                # Resize mask to latent size [128, 128] using nearest interpolation as specified in S2I-Net
                 mask_latents = F.interpolate(masks, size=latents.shape[-2:], mode="nearest")
                 
                 # Apply Gaussian Blur to Mask (Soft Masking)
                 # We use the blur kernel from gradient_criterion
-                mask_latents_blurred = gradient_criterion.blur(mask_latents) 
+                mask_latents_blurred = gradient_criterion.mask_blur(mask_latents) 
                 
                 # 2. Apply Noise with Soft Mask
                 # Background (1-mask) stays clean (latents)

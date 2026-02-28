@@ -55,7 +55,8 @@ class HairInpaintingDataset(Dataset):
 
         if len(self.image_paths) == 0:
             print(f"Warning: No images found in {data_root} with structure {{braid/unbraid}}/img/{mode} or direct img/{mode}")
-
+        else:
+            print(f"✅ [Dataset] Successfully loaded {len(self.image_paths)} images for category '{category if category else 'All'}'.")
         self.transform = transforms.Compose([
             transforms.Resize((size, size), interpolation=transforms.InterpolationMode.BILINEAR),
             transforms.ToTensor(),
@@ -63,7 +64,7 @@ class HairInpaintingDataset(Dataset):
         ])
         
         self.mask_transform = transforms.Compose([
-            transforms.Resize((size, size), interpolation=transforms.InterpolationMode.NEAREST),
+            transforms.Resize((size, size), interpolation=transforms.InterpolationMode.BILINEAR),
             transforms.ToTensor(),
         ])
 
@@ -78,33 +79,57 @@ class HairInpaintingDataset(Dataset):
         
         # 1. Target Image (RGB)
         target_img = Image.open(img_path).convert("RGB")
-        
-        # 2. Mask (L)
-        if os.path.exists(mask_path):
-            mask_img = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)
-            if mask_img is None:
-                mask_img = np.zeros((self.size, self.size), dtype=np.uint8) + 255
-            else:
-                mask_img = cv2.resize(mask_img, (self.size, self.size), interpolation=cv2.INTER_NEAREST)
-        else:
-            mask_img = np.zeros((self.size, self.size), dtype=np.uint8) + 255
-            
-        # Soft Masking Strategy
-        _, mask_bin = cv2.threshold(mask_img, 127, 255, cv2.THRESH_BINARY)
-        kernel = np.ones((15, 15), np.uint8)
-        mask_dilated = cv2.dilate(mask_bin, kernel, iterations=1)
-        mask_soft = cv2.GaussianBlur(mask_dilated, (0, 0), sigmaX=10)
-        mask_tensor = torch.from_numpy(mask_soft.astype(np.float32) / 255.0).unsqueeze(0)
+        target_img = target_img.resize((self.size, self.size), Image.BILINEAR)
+        # Note: ToTensor and Normalize moved below augmentation!
 
-        # 3. Condition Image (Color Sketch) (RGB)
+        # 2. Mask (L) and Condition Image (RGB) Setup
+        if os.path.exists(mask_path):
+            mask_img = Image.open(mask_path).convert("L")
+        else:
+            mask_img = Image.new("L", (self.size, self.size), color=255)
+
         if os.path.exists(cond_path):
             cond_img = Image.open(cond_path).convert("RGB")
         else:
             cond_img = Image.new("RGB", target_img.size, (128, 128, 128))
 
-        # Apply Transforms
-        pixel_values = self.transform(target_img)
-        conditioning_pixel_values = self.transform(cond_img)
+        mask_img = mask_img.resize((self.size, self.size), Image.NEAREST)
+        cond_img = cond_img.resize((self.size, self.size), Image.NEAREST)
+
+        # --- Data Augmentation on All Inputs (MUST be spatially aligned) ---
+        import torchvision.transforms.functional as TF
+        import random
+        
+        if self.mode == "train":
+            # Random Horizontal Flip (50% chance)
+            if random.random() > 0.5:
+                target_img = TF.hflip(target_img)
+                mask_img = TF.hflip(mask_img)
+                cond_img = TF.hflip(cond_img)
+            
+            # Random Affine (Rotation and Translation)
+            angle = random.uniform(-15, 15)
+            # max translation 50 pixels
+            translate_x = int(random.uniform(-50, 50))
+            translate_y = int(random.uniform(-50, 50))
+            
+            # Apply identically to maintain perfect spatial alignment!
+            # Target (RGB) uses BILINEAR, Mask/Sketch (Categorical) use NEAREST
+            target_img = TF.affine(target_img, angle=angle, translate=[translate_x, translate_y], scale=1.0, shear=0, interpolation=TF.InterpolationMode.BILINEAR)
+            mask_img = TF.affine(mask_img, angle=angle, translate=[translate_x, translate_y], scale=1.0, shear=0, interpolation=TF.InterpolationMode.NEAREST)
+            cond_img = TF.affine(cond_img, angle=angle, translate=[translate_x, translate_y], scale=1.0, shear=0, interpolation=TF.InterpolationMode.NEAREST)
+
+        # Transform final target image
+        pixel_values = transforms.ToTensor()(target_img)
+        pixel_values = transforms.Normalize([0.5], [0.5])(pixel_values)
+
+        # Directly convert the soft mask to a tensor (0.0 ~ 1.0)
+        # This preserves the predicted matte's natural soft boundaries
+        mask_tensor = transforms.ToTensor()(mask_img)
+
+        # 3. Transform final condition image
+        conditioning_pixel_values = transforms.ToTensor()(cond_img)
+        conditioning_pixel_values = transforms.Normalize([0.5], [0.5])(conditioning_pixel_values)
         
         return {
             "pixel_values": pixel_values,      

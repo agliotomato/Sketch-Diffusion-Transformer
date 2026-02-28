@@ -39,3 +39,12 @@
 - **장점**: 모델이 단순한 덩어리(흐름선)와 복잡한 구조(폐쇄된 곡선)를 동시에 번갈아 학습하므로, 특정 스케치 스타일에 편향되지 않고 범용적인 일반화(Generalization) 성능을 갖추며 Catastrophic Forgetting을 방지합니다.
 - **필수 보완점 (디테일 뭉개짐 방지)**: 쉬운 데이터(unbraid)에 섞여 땋은 머리의 세밀한 마디(Knot) 형태가 묻히는 것을 막기 위해 다음을 반드시 적용합니다.
   - **구조적 손실 (Structural Loss) 추가**: 형태를 명확히 잡기 위해 원본 이미지와 생성 이미지 간의 경계선을 비교하는 **Pixel-Space Gradient Loss를 학습 목표(Objective)에 명시적으로 추가하여 학습**합니다. (이전 논의에서 채택된 방식)
+
+---
+
+## 📸 결과 비교표 (Visual Comparison)
+
+| 원본 사진 (Target Image) | 스케치 (Sketch) | 이전 결과 (Previous Result) | 현재 결과 (Current Result) |
+| :---: | :---: | :---: | :---: |
+| <img src="dataset/braid/img/test/wavy_766.png" width="200"> | <img src="dataset/braid/sketch/test/braid_2534.png" width="200"> | <img src="results/0228_2/766_2537_matte.png" width="200">| <img src="results/0228_2/2.png" width="200"> |
+| <img src="dataset/braid/img/test/wavy_781.png" width="200"> | <img src="dataset/braid/sketch/test/braid_2537.png" width="200"> | <img src="results/0228_2/781_2537_matte.png" width="200">| <img src="results/0228_2/5.png" width="200"> |
