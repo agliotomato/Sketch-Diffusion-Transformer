@@ -126,7 +126,7 @@ def main():
     ])
     
     mask_transform = transforms.Compose([
-        transforms.Resize((1024, 1024), interpolation=transforms.InterpolationMode.NEAREST),
+        transforms.Resize((1024, 1024), interpolation=transforms.InterpolationMode.BILINEAR),
         transforms.ToTensor()
     ])
 
@@ -138,7 +138,8 @@ def main():
     raw_sketch = Image.open(args.sketch_path).convert("RGB")
     
     print(f"Applying transforms: scale={args.scale}, x={args.x}, y={args.y}")
-    mask = apply_affine_transform(raw_mask, args.scale, args.x, args.y, target_size, interpolation=cv2.INTER_NEAREST)
+    # Use INTER_LINEAR for mask to preserve the soft alpha values from S2M-Net
+    mask = apply_affine_transform(raw_mask, args.scale, args.x, args.y, target_size, interpolation=cv2.INTER_LINEAR)
     sketch = apply_affine_transform(raw_sketch, args.scale, args.x, args.y, target_size, interpolation=cv2.INTER_LINEAR)
 
     pixel_values = transform(image).unsqueeze(0).to(device, dtype=dtype)
