@@ -44,7 +44,7 @@
 
 ## 📸 결과 비교표 (Visual Comparison)
 
-| 원본 사진 (Target Image) | 스케치 (Sketch) | 이전 결과 (Previous Result) | 현재 결과 (Current Result) |
+| 원본 사진 | 스케치 | 정렬 | 결과  |
 | :---: | :---: | :---: | :---: |
 | <img src="dataset/braid/img/test/wavy_766.png" width="200"> | <img src="dataset/braid/sketch/test/braid_2534.png" width="200"> | <img src="results/0228_2/766_2537_matte.png" width="200">| <img src="results/0228_2/2.png" width="200"> |
 | <img src="dataset/braid/img/test/wavy_781.png" width="200"> | <img src="dataset/braid/sketch/test/braid_2537.png" width="200"> | <img src="results/0228_2/781_2537_matte.png" width="200">| <img src="results/0228_2/5.png" width="200"> |
