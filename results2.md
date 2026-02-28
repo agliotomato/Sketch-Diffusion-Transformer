@@ -48,3 +48,20 @@
 | :---: | :---: | :---: | :---: |
 | <img src="dataset/braid/img/test/wavy_766.png" width="200"> | <img src="dataset/braid/sketch/test/braid_2534.png" width="200"> | <img src="results/0228_2/766_2537_matte.png" width="200">| <img src="results/0228_2/2.png" width="200"> |
 | <img src="dataset/braid/img/test/wavy_781.png" width="200"> | <img src="dataset/braid/sketch/test/braid_2537.png" width="200"> | <img src="results/0228_2/781_2537_matte.png" width="200">| <img src="results/0228_2/5.png" width="200"> |
+
+accelerate launch train_sd3_5_masked.py \
+  --data_root="dataset3" \
+  --category="unbraid" \
+  --num_epochs=10 \
+  --batch_size=4 \
+  --gradient_accumulation_steps=2 \
+  --lambda_shape=0.0
+
+accelerate launch train_sd3_5_masked.py \
+  --data_root="dataset3" \
+  --category="braid" \
+  --num_epochs=20 \
+  --batch_size=4 \
+  --gradient_accumulation_steps=2 \
+  --lambda_shape=0.1 \
+  --resume_from_checkpoint="checkpoint-stage1-10"
