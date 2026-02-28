@@ -25,6 +25,9 @@
 *   무작위 회전 (±15도)
 조건 입력(Sketch/Mask) 변환 시에도 `Nearest`를 유지하여 왜곡 없는 강건한(Robust) 형태 대응 능력을 부여합니다.
 
+#### 🚨 핵심 고려 사항: 3중 매칭 공간 정렬 (3-way Spatial Alignment)
+기하학적 증강(회전, 이동, 반전)을 가할 때, **타겟 사진(Target Image), 스케치(Cond), 매트(Mask) 세 장의 이미지에 반드시 100% 동일한 난수(각도, 이동거리)를 일괄 적용**해야만 합니다. 하나라도 따로 회전하게 되면 모델이 스케치의 공간적 지시를 무시하게 되는 치명적 오작동(과적합)을 유발하며, 현재 본 파이프라인은 이 1:1 공간 매칭을 완벽히 강제하도록 구현되었습니다.
+
 ---
 
 ## 3. 2단계 커리큘럼 학습 전략 (Two-Stage Curriculum Training)
@@ -64,7 +67,10 @@
 
 ## 5. 추론 전략 (Inference Strategy)
 
-### 5.1. Classifier-Free Guidance (CFG) 적용
+### 5.1. Reference Attention 미사용 구조 (Self-Attention 기반 참조)
+기발하게도 별도의 복잡한 K, V 주입식 Reference Attention 모듈을 추가하지 않았습니다. 대신 입력 레이저(Latent)의 배경 영역(Non-mask) 원본 픽셀을 보존(Soft-masking)한 채로 SD3.5를 통과시키면, **SD3.5 고유의 강력한 전역 Self-Attention 메커니즘이 스스로 배경의 스타일과 색감을 읽어 들여(Reference) 머리카락을 타겟의 피부톤 및 질감과 자연스럽게 동기화**합니다.
+
+### 5.2. Classifier-Free Guidance (CFG) 적용
 스케치 구조를 강제하기 위해, 입력 스케치 조건이 존재하는 경우(`cond_img`)와 없는 경우(`Zero-tensor`)를 동시에 추론(Batch=2)하여 방향성을 외삽합니다.
 *   **CFG Scale (3.5 ~ 4.5)**: 모델이 기존에 가지고 있던 Prior(얼굴 생김새에 따른 기본 머리 모양)를 억누르고, 사용자가 제공한 스케치의 형태와 결을 절대적으로 따르도록 만듭니다.
 

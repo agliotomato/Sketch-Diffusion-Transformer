@@ -112,3 +112,5 @@ ControlNet 없이 단일 Transformer 모델이 형태와 질감을 모두 처리
 ## 7. 참고 문헌 (References)
 *   [ArXiv:2407.15886](https://arxiv.org/pdf/2407.15886)
 
+
+
