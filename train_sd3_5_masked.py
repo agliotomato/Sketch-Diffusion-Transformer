@@ -346,7 +346,8 @@ def main():
 
                 # Calculate MSE Loss
                 loss_mse = F.mse_loss(model_pred.float(), target_v.float(), reduction="none")
-                loss_mse = (loss_mse * mask_latents_blurred).sum() / (mask_latents_blurred.sum() * model_pred.shape[1] + 1e-6)
+                mask_f32 = mask_latents_blurred.float()
+                loss_mse = (loss_mse * mask_f32).sum() / (mask_f32.sum() * model_pred.shape[1] + 1e-6)
                 
                 # Shape Reconstruction Loss (Gradient Loss)
                 loss_shape = torch.tensor(0.0, device=accelerator.device)
