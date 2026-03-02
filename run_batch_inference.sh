@@ -9,8 +9,8 @@ MATTE="dataset3/braid/matte/test/braid_2534.png"
 SCALE=1.1
 X=0
 Y=0
-GUIDANCE=20.0
-STEPS=50
+GUIDANCE=7.0
+STEPS=30
 BG_RATIO=0.5
 
 # 결과물이 저장될 폴더 생성
