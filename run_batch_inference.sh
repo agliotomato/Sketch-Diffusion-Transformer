@@ -1,15 +1,15 @@
 #!/bin/bash
 
 # 설정할 이미지 경로들 (실제 테스트할 이미지로 변경하세요)
-TARGET="dataset3/val/target.png"
-SKETCH="dataset3/val/sketch.png"
-MATTE="dataset3/val/mask.png"
+TARGET="dataset3/unbraid/img/test/wavy_766.png"
+SKETCH="dataset3/braid/sketch/test/braid_2534.png"
+MATTE="dataset3/braid/mask/test/braid_2534.png"
 
 # 다른 파라미터들
-SCALE=1.0
+SCALE=1.1
 X=0
 Y=0
-GUIDANCE=4.0
+GUIDANCE=20.0
 STEPS=50
 BG_RATIO=0.5
 
@@ -21,7 +21,7 @@ echo "Starting Batch Inference for Stage 2 Checkpoints..."
 # 15부터 40까지 5단위로 반복
 for CP in 15 20 25 30 35 40; do
     CHECKPOINT_PATH="sd35_sketch_hair_lora/stage2_checkpoint-${CP}"
-    OUTPUT_PATH="results_stage2_compare/result_cp${CP}.png"
+    OUTPUT_PATH="results/0302/cp${CP}.png"
 
     echo "=================================================="
     echo "Running Inference explicitly for: ${CHECKPOINT_PATH}"
