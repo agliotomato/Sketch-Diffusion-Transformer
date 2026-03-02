@@ -3,7 +3,7 @@
 # 설정할 이미지 경로들 (실제 테스트할 이미지로 변경하세요)
 TARGET="dataset3/unbraid/img/test/wavy_766.png"
 SKETCH="dataset3/braid/sketch/test/braid_2534.png"
-MATTE="dataset3/braid/mask/test/braid_2534.png"
+MATTE="dataset3/braid/matte/test/braid_2534.png"
 
 # 다른 파라미터들
 SCALE=1.1
