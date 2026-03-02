@@ -6,6 +6,7 @@ models/
 *.pth
 *.bin
 *.h5
+checkpoints/
 
 # Outputs
 sd35_hair_lora/
