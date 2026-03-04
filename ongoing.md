@@ -58,7 +58,7 @@ GAN 구조에서는 Generator가 뭉개진 Shape Loss만 보고 형태를 그릴
 *   **한계점:** 기존의 두 체크포인트 모두 LPIPS 기반으로 훈련되지 않았습니다. 단순 파라미터 앙상블은 모델이 '이미 배운 것'을 섞을 뿐이므로, 앙상블만으로는 땋은 결 패턴을 구조적으로 흉내내는 LPIPS의 능력은 만들어낼 수 없습니다. 오직 위치 강건성과 선 긋기 능력의 결합만 일어납니다.
 
 ### B. Fine-tuning (Hybrid Loss)
-*   **시작점:** 덩어리와 실루엣, Gaussian Loss 체크포인트를 기본 모델로 불러옵니다.
+*   **시작점:** Gaussian Loss 체크포인트를 기본 모델로 불러옵니다.
 *   **Fine-tuning:** 이 모델 위에 Hybrid Loss (Multi-scale Sobel + LPIPS)를 적용하여 학습을 재개. 
 
 *   **이유:** 신경망은 저주파를 먼저 배우고 고주파를 나중에 배우는 성질이 있습니다(Spectral Bias). 따라서 Gaussian 모델에게 Multi-scale Sobel 패널티를 주면, 모델의 기존 지식을 깨지 않고 디테일만 살릴 수 있음. 
@@ -92,6 +92,5 @@ $$L_{S2I} = \lambda_1 L_1 + \lambda_{adv} L_{cGAN} + \lambda_{per} L_{per} + \la
 ---
 
 **결론:** 
-1. 지금 당장 두 체크포인트의 가중치를 0.5:0.5로 Merge한 뒤 추론(Inference) 테스트를 돌려 완성도를 확인한다. (전략 A)
-2. 완성도가 부족하다면, Gaussian 체크포인트를 베이스 모델로 삼고 당분간 Hybrid Loss 체제로 추가 학습(Fine-tuning, 전략 B) 진행.
-
+1. 두 체크포인트의 가중치를 0.5:0.5로 Merge한 뒤 추론테스트를 돌려 완성도를 확인(A)
+2. Gaussian 체크포인트를 베이스 모델로 삼고 Hybrid Loss 체제로 추가 학습(B) 진행.
