@@ -11,8 +11,11 @@ checkpoints/
 # Outputs
 sd35_hair_lora/
 results3/
+test_outputs/
 logs/
 wandb/
+dataset3.zip
+*.png
 
 # Python
 __pycache__/
@@ -32,3 +35,11 @@ pip-delete-this-directory.txt
 .vscode/
 .idea/
 *.swp
+
+# Development Scripts & Tools
+test_*.py
+research_plan.md
+run_train_resume.sh
+plot_epoch_loss_v2.py
+tools/
+results/
