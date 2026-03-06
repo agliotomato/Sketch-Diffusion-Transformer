@@ -90,8 +90,22 @@ class HairInpaintingDataset(Dataset):
 
         if os.path.exists(cond_path):
             cond_img = Image.open(cond_path).convert("RGB")
+            # Binarize the sketch image to remove GAN color artifacts
+            # We want the output to ALWAYS be: Black Background (0), White Stroke (255)
+            import cv2
+            import numpy as np
+            cond_np = np.array(cond_img)
+            gray = cv2.cvtColor(cond_np, cv2.COLOR_RGB2GRAY)
+            if np.mean(gray) < 127: # Black background, colored/white lines
+                # Already black bg, white lines -> Just binarize
+                _, binary = cv2.threshold(gray, 10, 255, cv2.THRESH_BINARY)
+            else: # White background, colored/black lines
+                # White bg, dark lines -> Invert it to black bg, white lines
+                _, binary = cv2.threshold(gray, 240, 255, cv2.THRESH_BINARY_INV)
+            cond_img = Image.fromarray(cv2.cvtColor(binary, cv2.COLOR_GRAY2RGB))
         else:
-            cond_img = Image.new("RGB", target_img.size, (128, 128, 128))
+            # Empty sketch should match our new standard: Black Background (0)
+            cond_img = Image.new("RGB", target_img.size, (0, 0, 0))
 
         mask_img = mask_img.resize((self.size, self.size), Image.NEAREST)
         cond_img = cond_img.resize((self.size, self.size), Image.NEAREST)

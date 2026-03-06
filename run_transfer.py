@@ -135,6 +135,18 @@ def main():
     sketch_img = Image.open(args.sketch).convert("RGB")
     matte_img = Image.open(args.matte).convert("L")
     
+    # Binarize the sketch image to remove GAN color artifacts
+    # We want the output to ALWAYS be: Black Background (0), White Stroke (255)
+    sketch_np = np.array(sketch_img)
+    sketch_gray = cv2.cvtColor(sketch_np, cv2.COLOR_RGB2GRAY)
+    if np.mean(sketch_gray) < 127: # Black background
+        # Already black bg, white lines -> Just binarize
+        _, sketch_binary = cv2.threshold(sketch_gray, 10, 255, cv2.THRESH_BINARY)
+    else: # White background
+        # White bg, dark lines -> Invert it to black bg, white lines
+        _, sketch_binary = cv2.threshold(sketch_gray, 240, 255, cv2.THRESH_BINARY_INV)
+    sketch_img = Image.fromarray(cv2.cvtColor(sketch_binary, cv2.COLOR_GRAY2RGB))
+
     # 3. Apply Transform to Sketch & Matte
     print(f"Applying transform: Scale={args.scale}, X={args.x}, Y={args.y}")
     # Use Area/Linear for Sketch to preserve lines

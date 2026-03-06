@@ -366,11 +366,42 @@ def main():
                             target=target_v.float(), 
                             mask=mask_latents # Pass unblurred mask_latents to gradient_criterion, it will blur it
                         )
+                # Timestep-weighted Shape Loss (Amplification in t=300~700 range)
+                # SD3.5 timesteps are from 0 to 1000. 
+                # (t=0 is clean image, t=1000 is pure noise theoretically, though SD3 uses Rectified Flow 0 to 1)
+                # In diffuser's scheduler.timesteps, it usually goes 1000 -> 0.
+                # `timesteps` selected here is in [0, 1000].
+                # We want to boost lambda_shape exponentially or linearly when 300 <= t <= 700
                 
+                # Default weight
+                current_lambda = args.lambda_shape
+                
+                if args.lambda_shape > 0:
+                    # Create a tensor of weights matching the batch size
+                    # Base lambda shape
+                    lambda_weights = torch.full((bsz,), args.lambda_shape, device=device)
+                    
+                    # Boost factor (e.g., 5x stronger in the critical range)
+                    boost_factor = 5.0 
+                    
+                    # Calculate Gaussian-like or step amplification centered around t=500
+                    # Let's use a smooth parabola or just a step function for simplicity:
+                    # if 300 <= t <= 700, then weight = lambda * 5
+                    # For stability, we compute it per-sample in the batch
+                    boost_mask = (timesteps >= 300) & (timesteps <= 700)
+                    lambda_weights = torch.where(boost_mask, lambda_weights * boost_factor, lambda_weights)
+                    
+                    # Apply weight to each sample's shape loss if calculate per-sample, 
+                    # but gradient_criterion currently returns mean loss.
+                    # We need to reshape lambda_weights and apply it.
+                    # Actually, our ShapeLoss returns a scalar (mean loss). 
+                    # To apply per-batch-item weight, we can approximate by multiplying the mean loss by the mean of lambda_weights,
+                    # OR we can modify ShapeLoss to return per-sample loss.
+                    # For engineering simplicity and stability, we take the mean of the boosted weights for this batch:
+                    current_lambda = lambda_weights.mean().item()
+                    
                 # Total Loss
-                loss = loss_mse + args.lambda_shape * loss_shape
-
-                # Backprop
+                loss = loss_mse + current_lambda * loss_shape
                 accelerator.backward(loss)
                 optimizer.step()
                 optimizer.zero_grad()

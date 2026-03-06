@@ -137,6 +137,18 @@ def main():
     raw_mask = Image.open(args.mask_path).convert("L")
     raw_sketch = Image.open(args.sketch_path).convert("RGB")
     
+    # Binarize the sketch image to remove GAN color artifacts
+    # We want the output to ALWAYS be: Black Background (0), White Stroke (255)
+    sketch_np = np.array(raw_sketch)
+    sketch_gray = cv2.cvtColor(sketch_np, cv2.COLOR_RGB2GRAY)
+    if np.mean(sketch_gray) < 127: # Black background
+        # Already black bg, white lines -> Just binarize
+        _, sketch_binary = cv2.threshold(sketch_gray, 10, 255, cv2.THRESH_BINARY)
+    else: # White background
+        # White bg, dark lines -> Invert it to black bg, white lines
+        _, sketch_binary = cv2.threshold(sketch_gray, 240, 255, cv2.THRESH_BINARY_INV)
+    raw_sketch = Image.fromarray(cv2.cvtColor(sketch_binary, cv2.COLOR_GRAY2RGB))
+
     print(f"Applying transforms: scale={args.scale}, x={args.x}, y={args.y}")
     # Use INTER_LINEAR for mask to preserve the soft alpha values from S2M-Net
     mask = apply_affine_transform(raw_mask, args.scale, args.x, args.y, target_size, interpolation=cv2.INTER_LINEAR)
