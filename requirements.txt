@@ -31,4 +31,6 @@ scikit-learn==1.4.2
 
 # Extras
 bitsandbytes
+kornia
+lpips
 protobuf==5.27.0
