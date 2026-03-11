@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(///wsl.localhost/Ubuntu-22.04-D/home/agliotomato/**)",
+      "Read(//mnt/wsl/Ubuntu-22.04-D/home/agliotomato/**)"
+    ]
+  }
+}
